@@ -408,6 +408,7 @@ export const en = {
   },
   crash: { title: 'Something went wrong', body: 'This screen could not open. Try again to reload it.', retry: 'Try again' },
   errors: {
+    serverWaking: 'The server may be waking up. Please wait while we reconnect.',
     network: 'The server could not be reached. Check your connection and try again.',
     timeout: 'The server took too long to answer. Try again.',
     rateLimited: 'Too many requests. Wait a moment and try again.',

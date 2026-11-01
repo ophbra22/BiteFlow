@@ -15,7 +15,10 @@ export type RequestOptions = {
   auth?: boolean;
   headers?: Record<string, string>;
   idempotencyKey?: string;
+  /** An explicit timeout opts out of automatic cold-start retries. */
   timeoutMs?: number;
+  /** Per-request hint: show errors.serverWaking while true; cleared on settlement. */
+  onServerWaking?: (waking: boolean) => void;
   signal?: AbortSignal;
   responseType?: 'json' | 'text';
 };
@@ -33,10 +36,30 @@ export const UPLOAD_TIMEOUT_MS = 60_000;
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
+// Only request identities are retained: no URLs, credentials or response data.
+const wakingRequests = new Set<symbol>();
+const wakingListeners = new Set<(waking: boolean) => void>();
+export const getServerWakingSnapshot = () => wakingRequests.size > 0;
+
+/** Subscribe to aggregate transitions; read the snapshot for the initial state. */
+export function subscribeServerWaking(listener: (waking: boolean) => void) {
+  wakingListeners.add(listener);
+  return () => { wakingListeners.delete(listener); };
+}
+
+function setServerWaking(requestId: symbol, waking: boolean) {
+  const previous = getServerWakingSnapshot();
+  if (waking) wakingRequests.add(requestId); else wakingRequests.delete(requestId);
+  const current = getServerWakingSnapshot();
+  if (previous === current) return;
+  for (const listener of [...wakingListeners]) {
+    try { listener(current); } catch { /* UI observers cannot break transport. */ }
+  }
+}
 export function createApiClient(deps: ClientDeps) {
   const doFetch = deps.fetch ?? fetch;
 
-  async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  async function requestOnce<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const base = deps.baseUrl();
     if (!base) throw new ApiError('config');
     const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
@@ -105,6 +128,53 @@ export function createApiClient(deps: ClientDeps) {
     }
   }
 
+  async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    // Only default-deadline, bodyless GETs may be repeated. Writes retain one
+    // attempt, their original idempotency key and unknown-outcome semantics.
+    const canRetry = (options.method ?? 'GET') === 'GET' &&
+      options.json === undefined && options.form === undefined && options.timeoutMs === undefined;
+    if (!canRetry) return requestOnce<T>(path, options);
+    const base = deps.baseUrl();
+    const token = options.auth === false ? null : deps.token();
+    const wakingId = Symbol();
+    let waking = false;
+    const notify = (value: boolean) => {
+      waking = value;
+      setServerWaking(wakingId, value);
+      // UI observers must not turn a successful request into a failed one.
+      try { options.onServerWaking?.(value); } catch { /* observer only */ }
+    };
+    const wakingTimer = setTimeout(() => notify(true), 10_000);
+    try {
+      for (let attempt = 0; ; attempt++) {
+        if (options.signal?.aborted) throw new ApiError('cancelled');
+        if (deps.baseUrl() !== base || (options.auth !== false && deps.token() !== token)) {
+          throw new ApiError('unauthorized', { status: 401 });
+        }
+        try {
+          return await requestOnce<T>(path, options);
+        } catch (error) {
+          // A timeout is a possible sleeping server, not proof of one. Other
+          // errors (including rate limits and rejected sessions) remain final.
+          if (!(error instanceof ApiError) || error.kind !== 'timeout' || attempt === 2) throw error;
+          await new Promise<void>((resolve, reject) => {
+            const finish = () => { options.signal?.removeEventListener('abort', cancel); resolve(); };
+            const timer = setTimeout(finish, 1_000);
+            const cancel = () => {
+              clearTimeout(timer);
+              options.signal?.removeEventListener('abort', cancel);
+              reject(new ApiError('cancelled'));
+            };
+            options.signal?.addEventListener('abort', cancel);
+            if (options.signal?.aborted) cancel();
+          });
+        }
+      }
+    } finally {
+      clearTimeout(wakingTimer);
+      if (waking) notify(false);
+    }
+  }
   // Capture before any local asynchronous work; never dispatch an old account's
   // photo or draft using a newly signed-in account's credentials.
   const captureSession = () => {

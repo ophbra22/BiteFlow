@@ -1,6 +1,8 @@
 """Stage 0 regressions for render.yaml, 16-migration cutover, and staging smoke safety gates."""
 
 import importlib.util
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -520,3 +522,127 @@ def test_fastapi_health_endpoint_reports_render_git_commit(tmp_path, monkeypatch
         assert module.verify_deployed_commit_sha(body, expected_sha, root=ROOT) == expected_sha
         with pytest.raises(AssertionError, match="Deployed commit SHA mismatch"):
             module.verify_deployed_commit_sha(body, "deadbeef1234567", root=ROOT)
+
+
+GIT = shutil.which("git") or r"C:\Program Files\Git\cmd\git.exe"
+NUTRITION_FILE = "src/foodlogger/nutrition_reference.py"
+
+
+def _git(cwd: Path, *args: str) -> str:
+    identity = ("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid")
+    return subprocess.check_output([GIT, "-C", str(cwd), *identity, *args], text=True).strip()
+
+
+def _commit_nutrition_file(repo: Path, content: str) -> str:
+    path = repo / NUTRITION_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", content)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+@pytest.fixture
+def source_repo(tmp_path) -> Path:
+    """A full repository with two commits and none of the real nutrition commits."""
+    repo = tmp_path / "source"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _commit_nutrition_file(repo, "first\n")
+    _commit_nutrition_file(repo, "second\n")
+    return repo
+
+
+def _shallow_clone(source: Path, target: Path, depth: int = 1) -> Path:
+    subprocess.check_call(
+        [GIT, "clone", "-q", "--depth", str(depth), source.as_uri(), str(target)],
+        stderr=subprocess.DEVNULL,
+    )
+    assert _git(target, "rev-parse", "--is-shallow-repository") == "true"
+    return target
+
+
+def test_nutrition_contracts_cover_every_required_commit():
+    module = _load_cutover_module()
+    assert set(module.NUTRITION_FIX_CONTRACTS) == set(module.REQUIRED_NUTRITION_COMMITS)
+
+
+def test_shallow_clone_verifies_absent_commits_through_catalog_contracts(source_repo, tmp_path):
+    module = _load_cutover_module()
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+    report = module.verify_commit_and_nutrition_fixes(clone)
+    assert report["head_sha"] == _git(clone, "rev-parse", "HEAD")
+    # Ancestry was not proven, so it must not be reported as proven.
+    assert report["required_nutrition_commits"] == {}
+    assert report["ancestry_unverifiable"] == list(module.REQUIRED_NUTRITION_COMMITS)
+    assert report["behavioral_contract"] == {"089f789": 2, "3658a17": 3, "4a9d6b6": 2}
+
+
+def test_shallow_clone_fails_when_a_nutrition_fix_regressed(source_repo, tmp_path, monkeypatch):
+    module = _load_cutover_module()
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+
+    class RegressedCatalog:
+        def search(self, query, preparation="unknown", limit=8):
+            return []
+
+    monkeypatch.setattr(module, "ReferenceCatalog", RegressedCatalog)
+    with pytest.raises(AssertionError, match="Nutrition fix 089f789 regressed"):
+        module.verify_commit_and_nutrition_fixes(clone)
+
+
+def test_shallow_clone_rejects_a_target_other_than_checked_out_head(source_repo, tmp_path):
+    module = _load_cutover_module()
+    clone = _shallow_clone(source_repo, tmp_path / "clone", depth=2)
+    with pytest.raises(AssertionError, match="only exercise the checked-out HEAD"):
+        module.verify_commit_and_nutrition_fixes(clone, target_commit="HEAD~1")
+
+
+def test_shallow_clone_rejects_modified_nutrition_code(source_repo, tmp_path):
+    module = _load_cutover_module()
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+    (clone / NUTRITION_FILE).write_text("locally changed\n", encoding="utf-8")
+    with pytest.raises(AssertionError, match="differs from HEAD"):
+        module.verify_commit_and_nutrition_fixes(clone)
+
+
+def test_full_clone_without_the_commits_fails_without_behavior_fallback(source_repo, monkeypatch):
+    module = _load_cutover_module()
+
+    def must_not_run(commits):
+        raise RuntimeError("catalog contracts must not replace ancestry in a full clone")
+
+    monkeypatch.setattr(module, "verify_nutrition_fix_behavior", must_not_run)
+    with pytest.raises(AssertionError, match="Missing required nutrition commits"):
+        module.verify_commit_and_nutrition_fixes(source_repo)
+
+
+def test_full_clone_rejects_a_present_commit_that_is_not_an_ancestor(source_repo, monkeypatch):
+    module = _load_cutover_module()
+    _git(source_repo, "checkout", "-q", "-b", "side")
+    side_commit = _commit_nutrition_file(source_repo, "side\n")
+    _git(source_repo, "checkout", "-q", "-")
+    monkeypatch.setattr(module, "REQUIRED_NUTRITION_COMMITS", (side_commit,))
+    with pytest.raises(AssertionError, match="Missing required nutrition commits"):
+        module.verify_commit_and_nutrition_fixes(source_repo)
+
+
+def test_shallow_clone_rejects_a_present_commit_that_is_not_an_ancestor(
+    source_repo, tmp_path, monkeypatch
+):
+    module = _load_cutover_module()
+    clone = _shallow_clone(source_repo, tmp_path / "clone", depth=2)
+    head = _git(clone, "rev-parse", "HEAD")
+    monkeypatch.setattr(module, "REQUIRED_NUTRITION_COMMITS", (head,))
+    with pytest.raises(AssertionError, match="Missing required nutrition commits"):
+        module.verify_commit_and_nutrition_fixes(clone, target_commit="HEAD~1")
+
+
+def test_full_clone_reports_verified_ancestry(source_repo, monkeypatch):
+    module = _load_cutover_module()
+    ancestor = _git(source_repo, "rev-parse", "HEAD~1")
+    monkeypatch.setattr(module, "REQUIRED_NUTRITION_COMMITS", (ancestor,))
+    report = module.verify_commit_and_nutrition_fixes(source_repo)
+    assert report["required_nutrition_commits"] == {ancestor: True}
+    assert report["ancestry_unverifiable"] == []
+    assert report["behavioral_contract"] == {}

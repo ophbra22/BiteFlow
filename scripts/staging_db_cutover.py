@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 from foodlogger.ai_gateway import AIGateway, BudgetPolicy
 from foodlogger.app import create_app
 from foodlogger.database import Database
+from foodlogger.nutrition_reference import ReferenceCatalog
 from foodlogger.security import Settings
 from foodlogger.text_input import SplitFood, SplitResult
 
@@ -140,6 +141,24 @@ EXPECTED_TABLES: tuple[str, ...] = (
 )
 
 REQUIRED_NUTRITION_COMMITS: tuple[str, ...] = ("089f789", "3658a17", "4a9d6b6")
+
+# (query, preparation, required top reference, forbidden reference). Each commit's
+# rows were checked to fail on that commit's parent and pass on the commit itself.
+NUTRITION_FIX_CONTRACTS: dict[str, tuple[tuple[str, str, str | None, str | None], ...]] = {
+    "089f789": (
+        ("omelette", "fried", "fdc:172185", None),
+        ("חביתה", "fried", "fdc:172185", None),
+    ),
+    "3658a17": (
+        ("egg", "cooked", "fdc:2707153", None),
+        ("flaxseed", "unknown", "fdc:169414", None),
+        ("walnut", "raw", "fdc:170187", None),
+    ),
+    "4a9d6b6": (
+        ("squid", "fried", "fdc:171982", None),
+        ("omelette with tomatoes and dark green vegetables", "fried", None, "fdc:2707236"),
+    ),
+}
 STAGING_PROJECT_ID = "gen-lang-client-0101662511"
 STAGING_SERVICE_IDS: tuple[str, ...] = (
     "srv-d6q78f450q8c73f3376g",
@@ -615,30 +634,76 @@ def verify_tls_and_role_contract(sample_dsn: str | None = None) -> dict:
     }
 
 
+def verify_nutrition_fix_behavior(commits: list[str]) -> dict[str, int]:
+    """Run each commit's catalog contract against the imported foodlogger code."""
+    catalog = ReferenceCatalog()
+    checked: dict[str, int] = {}
+    for commit in commits:
+        contracts = NUTRITION_FIX_CONTRACTS[commit]
+        for query, preparation, required_top, forbidden in contracts:
+            ids = [row.id for row in catalog.search(query, preparation, limit=8)]
+            if (required_top and ids[:1] != [required_top]) or forbidden in ids:
+                raise AssertionError(
+                    f"Nutrition fix {commit} regressed for {query!r} ({preparation}): {ids[:3]}"
+                )
+        checked[commit] = len(contracts)
+    return checked
+
+
 def verify_commit_and_nutrition_fixes(
     root: Path = ROOT,
     target_commit: str = "HEAD",
 ) -> dict:
+    """Require the nutrition fixes in target_commit.
+
+    Ancestry stays mandatory for every commit object present locally. Only a commit
+    absent from a shallow clone falls back to catalog contracts, and only when those
+    contracts actually exercise target_commit: the clean, checked-out HEAD.
+    """
     git_bin = shutil.which("git") or r"C:\Program Files\Git\cmd\git.exe"
     head_sha = None
     ancestors: dict[str, bool] = {}
+    ancestry_unverifiable: list[str] = []
+    behavioral_contract: dict[str, int] = {}
     if Path(git_bin).exists():
-        head_sha = subprocess.check_output(
-            [git_bin, "-C", str(root), "rev-parse", target_commit], text=True
-        ).strip()
+
+        def git_ok(*args: str) -> bool:
+            res = subprocess.run([git_bin, "-C", str(root), *args], capture_output=True)
+            return res.returncode == 0
+
+        def git_output(*args: str) -> str:
+            return subprocess.check_output([git_bin, "-C", str(root), *args], text=True).strip()
+
+        head_sha = git_output("rev-parse", target_commit)
+        shallow = git_output("rev-parse", "--is-shallow-repository") == "true"
         for commit in REQUIRED_NUTRITION_COMMITS:
-            res = subprocess.run(
-                [git_bin, "-C", str(root), "merge-base", "--is-ancestor", commit, head_sha],
-                capture_output=True,
-            )
-            ancestors[commit] = res.returncode == 0
+            if git_ok("cat-file", "-e", f"{commit}^{{commit}}"):
+                ancestors[commit] = git_ok("merge-base", "--is-ancestor", commit, head_sha)
+            elif shallow:
+                ancestry_unverifiable.append(commit)
+            else:
+                ancestors[commit] = False
         if not all(ancestors.values()):
             raise AssertionError(
                 f"Missing required nutrition commits in {target_commit} ({head_sha}): {ancestors}"
             )
+        if ancestry_unverifiable:
+            if head_sha != git_output("rev-parse", "HEAD"):
+                raise AssertionError(
+                    f"Shallow clone cannot verify {ancestry_unverifiable} in {target_commit} "
+                    f"({head_sha}): catalog contracts only exercise the checked-out HEAD"
+                )
+            if not git_ok("diff", "--quiet", "HEAD", "--", "src/foodlogger"):
+                raise AssertionError(
+                    f"Shallow clone cannot verify {ancestry_unverifiable}: src/foodlogger "
+                    "differs from HEAD"
+                )
+            behavioral_contract = verify_nutrition_fix_behavior(ancestry_unverifiable)
     return {
         "head_sha": head_sha,
         "required_nutrition_commits": ancestors,
+        "ancestry_unverifiable": ancestry_unverifiable,
+        "behavioral_contract": behavioral_contract,
     }
 
 

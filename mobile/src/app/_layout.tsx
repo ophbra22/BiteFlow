@@ -16,6 +16,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { ToastProvider } from '@/components/Toast';
+import { ServerWakingBanner } from '@/components/ServerWakingBanner';
 import { DraftProvider } from '@/data/DraftProvider';
 import { I18nProvider, loadInitialLanguage, useI18n } from '@/i18n/I18nProvider';
 import { ensureDirection } from '@/i18n/direction';
@@ -46,6 +47,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <I18nProvider initial={language}>
+        <ServerWakingBanner />
         <AuthProvider><WidgetProvider>
           <DraftProvider>
             <ToastProvider>

@@ -36,6 +36,26 @@ export const UPLOAD_TIMEOUT_MS = 60_000;
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
+// Only request identities are retained: no URLs, credentials or response data.
+const wakingRequests = new Set<symbol>();
+const wakingListeners = new Set<(waking: boolean) => void>();
+export const getServerWakingSnapshot = () => wakingRequests.size > 0;
+
+/** Subscribe to aggregate transitions; read the snapshot for the initial state. */
+export function subscribeServerWaking(listener: (waking: boolean) => void) {
+  wakingListeners.add(listener);
+  return () => { wakingListeners.delete(listener); };
+}
+
+function setServerWaking(requestId: symbol, waking: boolean) {
+  const previous = getServerWakingSnapshot();
+  if (waking) wakingRequests.add(requestId); else wakingRequests.delete(requestId);
+  const current = getServerWakingSnapshot();
+  if (previous === current) return;
+  for (const listener of [...wakingListeners]) {
+    try { listener(current); } catch { /* UI observers cannot break transport. */ }
+  }
+}
 export function createApiClient(deps: ClientDeps) {
   const doFetch = deps.fetch ?? fetch;
 
@@ -116,9 +136,11 @@ export function createApiClient(deps: ClientDeps) {
     if (!canRetry) return requestOnce<T>(path, options);
     const base = deps.baseUrl();
     const token = options.auth === false ? null : deps.token();
+    const wakingId = Symbol();
     let waking = false;
     const notify = (value: boolean) => {
       waking = value;
+      setServerWaking(wakingId, value);
       // UI observers must not turn a successful request into a failed one.
       try { options.onServerWaking?.(value); } catch { /* observer only */ }
     };

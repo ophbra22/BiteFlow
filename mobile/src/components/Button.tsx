@@ -85,6 +85,6 @@ const styles = StyleSheet.create({
   compact: { minHeight: 48, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   content: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   label: { flexShrink: 1 },
-  pressed: { opacity: 0.8 },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.45 },
 });

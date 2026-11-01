@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { BasisUnit, CORE_NUTRIENTS, Nutrient, OPTIONAL_NUTRIENTS } from '@/domain/nutrition';
 import { useI18n } from '@/i18n/I18nProvider';
 import { formatNumber } from '@/i18n/format';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, macroColors, radius, spacing } from '@/theme/tokens';
 
 import { AppText } from './AppText';
 
@@ -19,8 +19,13 @@ type Props = {
   basisUnit?: BasisUnit;
 };
 
+const ACCENT: Partial<Record<Nutrient, string>> = {
+  calories: colors.sand,
+  ...macroColors,
+};
+
 /**
- * Energy and macros as four tiles, optional label values as rows.
+ * Energy and macros as four figures, optional label values as rows.
  * A missing value is written out as "Not provided"; it is never shown as 0.
  */
 export function NutritionGrid({ values, showOptional, placeholder, testID }: Props) {
@@ -43,14 +48,15 @@ export function NutritionGrid({ values, showOptional, placeholder, testID }: Pro
               style={styles.tile}
               accessible
               accessibilityLabel={`${t(`nutrients.${key}`)}: ${text(key)}${known ? ` ${unit(key)}` : ''}`}>
-              <AppText variant="caption" color={colors.muted} center>
-                {key === 'carbs' ? t('nutrients.carbsShort') : t(`nutrients.${key}`)}
-              </AppText>
+              <View style={[styles.accent, { backgroundColor: ACCENT[key] }]} />
               <AppText testID={testID ? `${testID}-${key}` : undefined} variant={known ? 'number' : 'caption'} center>
                 {text(key)}
               </AppText>
-              <AppText variant="caption" color={colors.muted} center>
-                {unit(key)}
+              <AppText variant="caption" color={colors.muted} center numberOfLines={1}>
+                {known ? unit(key) : ''}
+              </AppText>
+              <AppText variant="caption" color={colors.muted} center numberOfLines={1}>
+                {key === 'carbs' ? t('nutrients.carbsShort') : t(`nutrients.${key}`)}
               </AppText>
             </View>
           );
@@ -80,13 +86,15 @@ const styles = StyleSheet.create({
   tile: {
     flexGrow: 1,
     flexBasis: '22%',
-    minWidth: 72,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
+    minWidth: 68,
+    alignItems: 'center',
+    backgroundColor: colors.field,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.xs,
     gap: 1,
   },
+  accent: { width: 16, height: 3, borderRadius: 2, marginBottom: spacing.xs },
   line: {
     flexDirection: 'row',
     justifyContent: 'space-between',

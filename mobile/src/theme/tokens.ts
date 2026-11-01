@@ -2,7 +2,7 @@
  * Orbit design system: a deep pine ground, sand text, and one soft tint per meal.
  * Every colour, size and radius in the app comes from here.
  */
-import { Platform } from 'react-native';
+import { Platform, TextStyle } from 'react-native';
 
 import type { MealType } from '@/domain/nutrition';
 
@@ -15,6 +15,10 @@ export const colors = {
   field: '#294536',
   /** Hairlines between quiet areas. */
   line: '#2F4D3D',
+  /** Quiet fills behind icons and tinted notices. */
+  sageTint: 'rgba(163, 194, 159, 0.16)',
+  butterTint: 'rgba(232, 212, 139, 0.12)',
+  dangerTint: 'rgba(242, 169, 157, 0.12)',
   /** Primary text. */
   sand: '#EFE6D3',
   /** Secondary text. 6.9:1 on ground, 5.5:1 on surface. */
@@ -40,12 +44,25 @@ export const mealColors: Record<MealType, string> = {
   snack: colors.rose,
 };
 
+/** The same three macro colours on every screen and chart. */
+export const macroColors = {
+  protein: colors.sage,
+  carbs: colors.butter,
+  fat: colors.rose,
+} as const;
+
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 } as const;
 
-export const radius = { sm: 12, md: 18, lg: 22, xl: 30, pill: 999 } as const;
+export const radius = { xs: 8, sm: 12, md: 18, lg: 22, xl: 30, pill: 999 } as const;
 
 /** Smallest comfortable touch target on both platforms. */
 export const touch = 48;
+
+/** Press feedback and short transitions. Longer motion is not part of this system. */
+export const motion = { fast: 140, base: 220 } as const;
+
+/** Readable column on large screens; phones use the full width. */
+export const contentWidth = 640;
 
 export const fonts = {
   regular: 'Fredoka_400Regular',
@@ -56,15 +73,19 @@ export const fonts = {
 } as const;
 
 /** The type scale. Sizes grow with the system text size setting. */
-export const type = {
-  display: { fontFamily: fonts.semibold, fontSize: 52, lineHeight: 58 },
+export const type: Record<string, TextStyle> = {
+  display: { fontFamily: fonts.semibold, fontSize: 52, lineHeight: 58, fontVariant: ['tabular-nums'] },
+  /** A headline value inside a card: daily calories in the dial, a meal's total. */
+  figure: { fontFamily: fonts.semibold, fontSize: 38, lineHeight: 44, fontVariant: ['tabular-nums'] },
   title: { fontFamily: fonts.semibold, fontSize: 28, lineHeight: 34 },
   heading: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 26 },
   body: { fontFamily: fonts.regular, fontSize: 17, lineHeight: 24 },
   bodyStrong: { fontFamily: fonts.medium, fontSize: 17, lineHeight: 24 },
   label: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 20 },
   caption: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 19 },
-  number: { fontFamily: fonts.semibold, fontSize: 19, lineHeight: 24 },
+  number: { fontFamily: fonts.semibold, fontSize: 19, lineHeight: 24, fontVariant: ['tabular-nums'] },
+  /** Section titles inside a screen, one step above body. */
+  section: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 24 },
 } as const;
 
 export type TypeVariant = keyof typeof type;

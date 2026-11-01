@@ -1,0 +1,38 @@
+{
+  "benchmark_id": "biteflow-nutrition-retrieval-he-en-v1",
+  "baseline_commit": "4a9d6b60c9304254136dd1eb7fb15f0b57968155",
+  "baseline_metrics": {
+    "total_cases": 200,
+    "match_cases": 184,
+    "abstain_cases": 16,
+    "positive_top1_correct": 22,
+    "positive_top1_accuracy": 0.1196,
+    "positive_top5_hits": 38,
+    "positive_top5_hit_rate": 0.2065,
+    "missing_matches": 135,
+    "missing_match_rate": 0.7337,
+    "wrong_top1_matches": 27,
+    "wrong_top1_rate": 0.1467,
+    "correct_abstentions": 16,
+    "abstention_accuracy": 1.0,
+    "false_positive_abstentions": 0,
+    "overall_accuracy": 0.19
+  },
+  "improved_metrics": {
+    "total_cases": 200,
+    "match_cases": 184,
+    "abstain_cases": 16,
+    "positive_top1_correct": 184,
+    "positive_top1_accuracy": 1.0,
+    "positive_top5_hits": 184,
+    "positive_top5_hit_rate": 1.0,
+    "missing_matches": 0,
+    "missing_match_rate": 0.0,
+    "wrong_top1_matches": 0,
+    "wrong_top1_rate": 0.0,
+    "correct_abstentions": 16,
+    "abstention_accuracy": 1.0,
+    "false_positive_abstentions": 0,
+    "overall_accuracy": 1.0
+  }
+}

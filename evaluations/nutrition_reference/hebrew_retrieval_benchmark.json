@@ -1,0 +1,2767 @@
+{
+  "benchmark_id": "biteflow-nutrition-retrieval-he-en-v1",
+  "version": "1.0.0",
+  "description": "Deterministic offline evaluation benchmark for Hebrew and English food retrieval against the bundled USDA FoodData Central reference catalog (13,225 foods). Measures retrieval hit rate, top-1 accuracy, missing-match rate, wrong-match rate, and negative-control abstention safety.",
+  "scope_note": "Offline reference retrieval and Hebrew/English query normalization only. Does NOT measure multimodal photo recognition or portion estimation accuracy.",
+  "reference_source": "USDA FoodData Central (SR Legacy, Foundation Foods, FNDDS 2021-2023)",
+  "total_cases": 200,
+  "match_cases_count": 184,
+  "abstain_cases_count": 16,
+  "cases": [
+    {
+      "id": "il_hummus_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "חומוס",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Hummus, plain",
+        "Hummus, commercial",
+        "Hummus, home prepared"
+      ],
+      "expected_top1_id": "fdc:2707402",
+      "expected_top1_name": "Hummus, plain"
+    },
+    {
+      "id": "il_falafel_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "פלאפל",
+      "preparation": "fried",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Falafel"
+      ],
+      "expected_top1_id": "fdc:2707408",
+      "expected_top1_name": "Falafel"
+    },
+    {
+      "id": "il_tahini_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "טחינה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tahini",
+        "Seeds, sesame butter, tahini"
+      ],
+      "expected_top1_id": "fdc:2707587",
+      "expected_top1_name": "Tahini"
+    },
+    {
+      "id": "il_raw_tahini_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "טחינה גולמית",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tahini",
+        "Seeds, sesame butter, tahini"
+      ],
+      "expected_top1_id": "fdc:2707587",
+      "expected_top1_name": "Tahini"
+    },
+    {
+      "id": "il_pita_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "פיתה",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Bread, pita"
+      ],
+      "expected_top1_id": "fdc:2707616",
+      "expected_top1_name": "Bread, pita"
+    },
+    {
+      "id": "il_pita_plural_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "פיתות",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Bread, pita"
+      ],
+      "expected_top1_id": "fdc:2707616",
+      "expected_top1_name": "Bread, pita"
+    },
+    {
+      "id": "il_whole_wheat_pita_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "פיתה כוסמין",
+      "preparation": "baked",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "il_whole_pita_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "פיתה מלאה",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Bread, pita, whole wheat",
+        "Bread, pita, whole-wheat",
+        "Bread, pita, wheat or cracked wheat"
+      ],
+      "expected_top1_id": "fdc:2707730",
+      "expected_top1_name": "Bread, pita, whole wheat"
+    },
+    {
+      "id": "il_challah_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "חלה",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Bread, egg, Challah"
+      ],
+      "expected_top1_id": "fdc:2707624",
+      "expected_top1_name": "Bread, egg, Challah"
+    },
+    {
+      "id": "il_challah_en",
+      "category": "israeli_staples",
+      "language": "en",
+      "query": "challah",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Bread, egg, Challah"
+      ],
+      "expected_top1_id": "fdc:2707624",
+      "expected_top1_name": "Bread, egg, Challah"
+    },
+    {
+      "id": "il_couscous_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "קוסקוס",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Couscous, plain, cooked",
+        "Couscous, cooked"
+      ],
+      "expected_top1_id": "fdc:2708441",
+      "expected_top1_name": "Couscous, plain, cooked"
+    },
+    {
+      "id": "il_bulgur_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "בורגול",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Bulgur, cooked",
+        "Bulgur, dry"
+      ],
+      "expected_top1_id": "fdc:170287",
+      "expected_top1_name": "Bulgur, cooked"
+    },
+    {
+      "id": "il_schnitzel_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "שניצל",
+      "preparation": "fried",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Fast foods, chicken, breaded and fried",
+        "Chicken breast tenders, breaded",
+        "Chicken, breaded and fried"
+      ],
+      "expected_top1_id": "fdc:170718",
+      "expected_top1_name": "Fast foods, chicken, breaded and fried, boneless pieces, plain"
+    },
+    {
+      "id": "il_chicken_schnitzel_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "שניצל עוף",
+      "preparation": "fried",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Fast foods, chicken, breaded and fried",
+        "Chicken breast tenders, breaded"
+      ],
+      "expected_top1_id": "fdc:170718",
+      "expected_top1_name": "Fast foods, chicken, breaded and fried, boneless pieces, plain"
+    },
+    {
+      "id": "il_tabbouleh_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "טאבולה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tabbouleh"
+      ],
+      "expected_top1_id": "fdc:2709131",
+      "expected_top1_name": "Tabbouleh"
+    },
+    {
+      "id": "il_halva_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "חלבה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Candies, halavah, plain"
+      ],
+      "expected_top1_id": "fdc:167996",
+      "expected_top1_name": "Candies, halavah, plain"
+    },
+    {
+      "id": "il_halva_en",
+      "category": "israeli_staples",
+      "language": "en",
+      "query": "halva",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Candies, halavah, plain"
+      ],
+      "expected_top1_id": "fdc:167996",
+      "expected_top1_name": "Candies, halavah, plain"
+    },
+    {
+      "id": "il_baklava_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "בקלאווה",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Baklava"
+      ],
+      "expected_top1_id": "fdc:2708044",
+      "expected_top1_name": "Baklava"
+    },
+    {
+      "id": "il_matzo_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "מצה",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Crackers, matzo",
+        "Matzo"
+      ],
+      "expected_top1_id": "fdc:2708158",
+      "expected_top1_name": "Crackers, matzo"
+    },
+    {
+      "id": "il_tzatziki_he",
+      "category": "israeli_staples",
+      "language": "he",
+      "query": "צזיקי",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tzatziki dip"
+      ],
+      "expected_top1_id": "fdc:2705448",
+      "expected_top1_name": "Tzatziki dip"
+    },
+    {
+      "id": "egg_omelet_he",
+      "category": "eggs",
+      "language": "he",
+      "query": "חביתה",
+      "preparation": "fried",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Egg, whole, cooked, omelet"
+      ],
+      "expected_top1_id": "fdc:172185",
+      "expected_top1_name": "Egg, whole, cooked, omelet"
+    },
+    {
+      "id": "egg_omelet_plural_he",
+      "category": "eggs",
+      "language": "he",
+      "query": "חביתות",
+      "preparation": "fried",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Egg, whole, cooked, omelet"
+      ],
+      "expected_top1_id": "fdc:172185",
+      "expected_top1_name": "Egg, whole, cooked, omelet"
+    },
+    {
+      "id": "egg_omelette_en",
+      "category": "eggs",
+      "language": "en",
+      "query": "omelette",
+      "preparation": "fried",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Egg, whole, cooked, omelet"
+      ],
+      "expected_top1_id": "fdc:172185",
+      "expected_top1_name": "Egg, whole, cooked, omelet"
+    },
+    {
+      "id": "egg_cheese_oil_he",
+      "category": "eggs",
+      "language": "he",
+      "query": "חביתה עם גבינה ושמן",
+      "preparation": "fried",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Egg omelet or scrambled egg, with cheese, made with oil"
+      ],
+      "expected_top1_id": "fdc:2707208",
+      "expected_top1_name": "Egg omelet or scrambled egg, with cheese, made with oil"
+    },
+    {
+      "id": "egg_generic_he",
+      "category": "eggs",
+      "language": "he",
+      "query": "ביצה",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Egg, whole, cooked, NS as to cooking method"
+      ],
+      "expected_top1_id": "fdc:2707153",
+      "expected_top1_name": "Egg, whole, cooked, NS as to cooking method"
+    },
+    {
+      "id": "egg_plural_he",
+      "category": "eggs",
+      "language": "he",
+      "query": "ביצים",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Egg, whole, cooked, NS as to cooking method"
+      ],
+      "expected_top1_id": "fdc:2707153",
+      "expected_top1_name": "Egg, whole, cooked, NS as to cooking method"
+    },
+    {
+      "id": "egg_fried_he",
+      "category": "eggs",
+      "language": "he",
+      "query": "ביצת עין",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Egg, whole, cooked, fried"
+      ],
+      "expected_top1_id": "fdc:173423",
+      "expected_top1_name": "Egg, whole, cooked, fried"
+    },
+    {
+      "id": "egg_scrambled_he",
+      "category": "eggs",
+      "language": "he",
+      "query": "ביצה מקושקשת",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Egg, whole, cooked, scrambled"
+      ],
+      "expected_top1_id": "fdc:172187",
+      "expected_top1_name": "Egg, whole, cooked, scrambled"
+    },
+    {
+      "id": "egg_hard_boiled_he",
+      "category": "eggs",
+      "language": "he",
+      "query": "ביצה קשה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Egg, whole, cooked, hard-boiled"
+      ],
+      "expected_top1_id": "fdc:173424",
+      "expected_top1_name": "Egg, whole, cooked, hard-boiled"
+    },
+    {
+      "id": "egg_poached_he",
+      "category": "eggs",
+      "language": "he",
+      "query": "ביצה עלומה",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Egg, whole, cooked, poached"
+      ],
+      "expected_top1_id": "fdc:172186",
+      "expected_top1_name": "Egg, whole, cooked, poached"
+    },
+    {
+      "id": "veg_cucumber_raw_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "מלפפון",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cucumber, raw",
+        "Cucumber, with peel, raw",
+        "Cucumber, peeled, raw"
+      ],
+      "expected_top1_id": "fdc:2709784",
+      "expected_top1_name": "Cucumber, raw"
+    },
+    {
+      "id": "veg_cucumber_plural_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "מלפפונים",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cucumber, raw",
+        "Cucumber, with peel, raw",
+        "Cucumber, peeled, raw"
+      ],
+      "expected_top1_id": "fdc:2709784",
+      "expected_top1_name": "Cucumber, raw"
+    },
+    {
+      "id": "veg_cucumber_unknown_en",
+      "category": "vegetables",
+      "language": "en",
+      "query": "cucumber",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cucumber, raw",
+        "Cucumber, with peel, raw"
+      ],
+      "expected_top1_id": "fdc:2709784",
+      "expected_top1_name": "Cucumber, raw"
+    },
+    {
+      "id": "veg_tomato_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "עגבנייה",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tomatoes, raw",
+        "Tomatoes, red, ripe, raw"
+      ],
+      "expected_top1_id": "fdc:2709719",
+      "expected_top1_name": "Tomatoes, raw"
+    },
+    {
+      "id": "veg_tomato_alt_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "עגבניה",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tomatoes, raw",
+        "Tomatoes, red, ripe, raw"
+      ],
+      "expected_top1_id": "fdc:2709719",
+      "expected_top1_name": "Tomatoes, raw"
+    },
+    {
+      "id": "veg_tomato_plural_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "עגבניות",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tomatoes, raw",
+        "Tomatoes, red, ripe, raw"
+      ],
+      "expected_top1_id": "fdc:2709719",
+      "expected_top1_name": "Tomatoes, raw"
+    },
+    {
+      "id": "veg_tomato_unknown_en",
+      "category": "vegetables",
+      "language": "en",
+      "query": "tomato",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tomatoes, raw",
+        "Tomatoes, red, ripe, raw"
+      ],
+      "expected_top1_id": "fdc:2709719",
+      "expected_top1_name": "Tomatoes, raw"
+    },
+    {
+      "id": "veg_carrot_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "גזר",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Carrots, raw"
+      ],
+      "expected_top1_id": "fdc:2709660",
+      "expected_top1_name": "Carrots, raw"
+    },
+    {
+      "id": "veg_carrot_plural_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "גזרים",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Carrots, raw"
+      ],
+      "expected_top1_id": "fdc:2709660",
+      "expected_top1_name": "Carrots, raw"
+    },
+    {
+      "id": "veg_onion_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "בצל",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Onions, raw"
+      ],
+      "expected_top1_id": "fdc:2709795",
+      "expected_top1_name": "Onions, raw"
+    },
+    {
+      "id": "veg_garlic_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "שום",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Garlic, raw"
+      ],
+      "expected_top1_id": "fdc:2709786",
+      "expected_top1_name": "Garlic, raw"
+    },
+    {
+      "id": "veg_lettuce_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "חסה",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Lettuce, raw",
+        "Lettuce, cos or romaine, raw",
+        "Lettuce, green leaf, raw"
+      ],
+      "expected_top1_id": "fdc:2709789",
+      "expected_top1_name": "Lettuce, raw"
+    },
+    {
+      "id": "veg_bell_pepper_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "גמבה",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Peppers, sweet, red, raw",
+        "Peppers, sweet",
+        "Peppers, raw, NFS"
+      ],
+      "expected_top1_id": "fdc:2709801",
+      "expected_top1_name": "Peppers, sweet, red, raw"
+    },
+    {
+      "id": "veg_red_pepper_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "פלפל אדום",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Peppers, sweet, red, raw"
+      ],
+      "expected_top1_id": "fdc:2709801",
+      "expected_top1_name": "Peppers, sweet, red, raw"
+    },
+    {
+      "id": "veg_eggplant_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "חציל",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Eggplant, cooked",
+        "Eggplant, raw"
+      ],
+      "expected_top1_id": "fdc:2709929",
+      "expected_top1_name": "Eggplant, cooked, no added fat"
+    },
+    {
+      "id": "veg_eggplant_unknown_en",
+      "category": "vegetables",
+      "language": "en",
+      "query": "eggplant",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Eggplant, raw",
+        "Eggplant, cooked"
+      ],
+      "expected_top1_id": "fdc:2709785",
+      "expected_top1_name": "Eggplant, raw"
+    },
+    {
+      "id": "veg_zucchini_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "קישוא",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Squash, summer, zucchini, includes skin, cooked"
+      ],
+      "expected_top1_id": "fdc:170534",
+      "expected_top1_name": "Squash, summer, zucchini, includes skin, cooked, boiled, drained, with salt"
+    },
+    {
+      "id": "veg_zucchini_en",
+      "category": "vegetables",
+      "language": "en",
+      "query": "zucchini",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Squash, summer, zucchini, includes skin, cooked"
+      ],
+      "expected_top1_id": "fdc:170534",
+      "expected_top1_name": "Squash, summer, zucchini, includes skin, cooked, boiled, drained, with salt"
+    },
+    {
+      "id": "veg_cabbage_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "כרוב",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cabbage, raw",
+        "Cabbage, green, raw"
+      ],
+      "expected_top1_id": "fdc:169975",
+      "expected_top1_name": "Cabbage, raw"
+    },
+    {
+      "id": "veg_cauliflower_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "כרובית",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cauliflower, NS as to form, cooked",
+        "Cauliflower, fresh, cooked",
+        "Cauliflower, cooked, boiled"
+      ],
+      "expected_top1_id": "fdc:2709897",
+      "expected_top1_name": "Cauliflower, fresh, cooked, no added fat"
+    },
+    {
+      "id": "veg_cauliflower_en",
+      "category": "vegetables",
+      "language": "en",
+      "query": "cauliflower",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cauliflower, NS as to form, cooked",
+        "Cauliflower, fresh, cooked",
+        "Cauliflower, cooked, boiled"
+      ],
+      "expected_top1_id": "fdc:2709897",
+      "expected_top1_name": "Cauliflower, fresh, cooked, no added fat"
+    },
+    {
+      "id": "veg_broccoli_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "ברוקולי",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Broccoli, NS as to form, cooked",
+        "Broccoli, fresh, cooked",
+        "Broccoli, cooked, boiled"
+      ],
+      "expected_top1_id": "fdc:2709645",
+      "expected_top1_name": "Broccoli, fresh, cooked, no added fat"
+    },
+    {
+      "id": "veg_broccoli_en",
+      "category": "vegetables",
+      "language": "en",
+      "query": "broccoli",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Broccoli, NS as to form, cooked",
+        "Broccoli, fresh, cooked",
+        "Broccoli, cooked, boiled"
+      ],
+      "expected_top1_id": "fdc:2709645",
+      "expected_top1_name": "Broccoli, fresh, cooked, no added fat"
+    },
+    {
+      "id": "veg_spinach_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "תרד",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Spinach, raw"
+      ],
+      "expected_top1_id": "fdc:2709614",
+      "expected_top1_name": "Spinach, raw"
+    },
+    {
+      "id": "veg_spinach_unknown_en",
+      "category": "vegetables",
+      "language": "en",
+      "query": "spinach",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Spinach, raw",
+        "Spinach, fresh, cooked",
+        "Spinach, cooked"
+      ],
+      "expected_top1_id": "fdc:2709614",
+      "expected_top1_name": "Spinach, raw"
+    },
+    {
+      "id": "veg_mushrooms_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "פטריות",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Mushrooms, raw",
+        "Mushrooms, white, raw"
+      ],
+      "expected_top1_id": "fdc:2709793",
+      "expected_top1_name": "Mushrooms, raw"
+    },
+    {
+      "id": "veg_avocado_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "אבוקדו",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Avocado, raw",
+        "Avocados, raw"
+      ],
+      "expected_top1_id": "fdc:2709223",
+      "expected_top1_name": "Avocado, raw"
+    },
+    {
+      "id": "veg_olives_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "זיתים",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Olives, NFS",
+        "Olives, ripe",
+        "Olives, green"
+      ],
+      "expected_top1_id": "fdc:2710088",
+      "expected_top1_name": "Olives, NFS"
+    },
+    {
+      "id": "veg_corn_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "תירס",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Corn, NS as to form, cooked",
+        "Corn, fresh, cooked",
+        "Corn, sweet, yellow, cooked",
+        "Corn, yellow"
+      ],
+      "expected_top1_id": "fdc:2709910",
+      "expected_top1_name": "Corn, fresh, cooked, no added fat"
+    },
+    {
+      "id": "veg_corn_en",
+      "category": "vegetables",
+      "language": "en",
+      "query": "corn",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Corn, NS as to form, cooked",
+        "Corn, fresh, cooked",
+        "Corn, sweet, yellow, cooked",
+        "Corn, yellow"
+      ],
+      "expected_top1_id": "fdc:2709910",
+      "expected_top1_name": "Corn, fresh, cooked, no added fat"
+    },
+    {
+      "id": "veg_potato_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "תפוח אדמה",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Potato, NFS",
+        "Potato, boiled",
+        "Potato, baked",
+        "Potatoes,"
+      ],
+      "expected_top1_id": "fdc:2709382",
+      "expected_top1_name": "Potato, NFS"
+    },
+    {
+      "id": "veg_potatoes_plural_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "תפוחי אדמה",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Potato, NFS",
+        "Potato, boiled",
+        "Potato, baked",
+        "Potatoes,"
+      ],
+      "expected_top1_id": "fdc:2709382",
+      "expected_top1_name": "Potato, NFS"
+    },
+    {
+      "id": "veg_sweet_potato_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "בטטה",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Sweet potato, NFS",
+        "Sweet potato, baked",
+        "Sweet potato, boiled",
+        "Sweet potato,"
+      ],
+      "expected_top1_id": "fdc:2709697",
+      "expected_top1_name": "Sweet potato, NFS"
+    },
+    {
+      "id": "veg_beet_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "סלק",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Beets, cooked",
+        "Beets, fresh, cooked",
+        "Beets, raw"
+      ],
+      "expected_top1_id": "fdc:169146",
+      "expected_top1_name": "Beets, cooked, boiled, drained"
+    },
+    {
+      "id": "veg_green_beans_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "שעועית ירוקה",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Green beans, fresh, cooked",
+        "Green beans, cooked",
+        "Beans, snap, green, cooked",
+        "Beans, snap, green, microwaved"
+      ],
+      "expected_top1_id": "fdc:169965",
+      "expected_top1_name": "Beans, snap, green, microwaved"
+    },
+    {
+      "id": "veg_green_beans_en",
+      "category": "vegetables",
+      "language": "en",
+      "query": "green beans",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Green beans, fresh, cooked",
+        "Green beans, cooked",
+        "Beans, snap, green, cooked",
+        "Beans, snap, green, microwaved"
+      ],
+      "expected_top1_id": "fdc:169965",
+      "expected_top1_name": "Beans, snap, green, microwaved"
+    },
+    {
+      "id": "veg_peas_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "אפונה",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Green peas, fresh, cooked",
+        "Green peas, cooked",
+        "Peas, green, cooked"
+      ],
+      "expected_top1_id": "fdc:2709959",
+      "expected_top1_name": "Green peas, fresh, cooked, no added fat"
+    },
+    {
+      "id": "veg_peas_en",
+      "category": "vegetables",
+      "language": "en",
+      "query": "peas",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Green peas, fresh, cooked",
+        "Green peas, cooked",
+        "Peas, green, cooked"
+      ],
+      "expected_top1_id": "fdc:2709959",
+      "expected_top1_name": "Green peas, fresh, cooked, no added fat"
+    },
+    {
+      "id": "veg_celery_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "סלרי",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Celery, raw"
+      ],
+      "expected_top1_id": "fdc:2709778",
+      "expected_top1_name": "Celery, raw"
+    },
+    {
+      "id": "veg_radish_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "צנון",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Radishes, raw",
+        "Radish, raw"
+      ],
+      "expected_top1_id": "fdc:169276",
+      "expected_top1_name": "Radishes, raw"
+    },
+    {
+      "id": "veg_kohlrabi_he",
+      "category": "vegetables",
+      "language": "he",
+      "query": "קולורבי",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Kohlrabi, raw"
+      ],
+      "expected_top1_id": "fdc:2709788",
+      "expected_top1_name": "Kohlrabi, raw"
+    },
+    {
+      "id": "fruit_apple_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "תפוח",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Apple, raw",
+        "Apples, raw"
+      ],
+      "expected_top1_id": "fdc:2709215",
+      "expected_top1_name": "Apple, raw"
+    },
+    {
+      "id": "fruit_apple_tree_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "תפוח עץ",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Apple, raw",
+        "Apples, raw"
+      ],
+      "expected_top1_id": "fdc:2709215",
+      "expected_top1_name": "Apple, raw"
+    },
+    {
+      "id": "fruit_apple_unknown_en",
+      "category": "fruits",
+      "language": "en",
+      "query": "apple",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Apple, raw",
+        "Apples, raw"
+      ],
+      "expected_top1_id": "fdc:2709215",
+      "expected_top1_name": "Apple, raw"
+    },
+    {
+      "id": "fruit_banana_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "בננה",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Banana, raw",
+        "Bananas, raw"
+      ],
+      "expected_top1_id": "fdc:2709224",
+      "expected_top1_name": "Banana, raw"
+    },
+    {
+      "id": "fruit_banana_plural_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "בננות",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Banana, raw",
+        "Bananas, raw"
+      ],
+      "expected_top1_id": "fdc:2709224",
+      "expected_top1_name": "Banana, raw"
+    },
+    {
+      "id": "fruit_banana_unknown_en",
+      "category": "fruits",
+      "language": "en",
+      "query": "banana",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Banana, raw",
+        "Bananas, raw"
+      ],
+      "expected_top1_id": "fdc:2709224",
+      "expected_top1_name": "Banana, raw"
+    },
+    {
+      "id": "fruit_orange_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "תפוז",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Orange, raw",
+        "Oranges, raw"
+      ],
+      "expected_top1_id": "fdc:2709171",
+      "expected_top1_name": "Orange, raw"
+    },
+    {
+      "id": "fruit_orange_unknown_en",
+      "category": "fruits",
+      "language": "en",
+      "query": "orange",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Orange, raw",
+        "Oranges, raw"
+      ],
+      "expected_top1_id": "fdc:2709171",
+      "expected_top1_name": "Orange, raw"
+    },
+    {
+      "id": "fruit_watermelon_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "אבטיח",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Watermelon, raw"
+      ],
+      "expected_top1_id": "fdc:2709270",
+      "expected_top1_name": "Watermelon, raw"
+    },
+    {
+      "id": "fruit_melon_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "מלון",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cantaloupe, raw",
+        "Melon, cantaloupe",
+        "Honeydew melon, raw",
+        "Melons,"
+      ],
+      "expected_top1_id": "fdc:2709226",
+      "expected_top1_name": "Cantaloupe, raw"
+    },
+    {
+      "id": "fruit_grapes_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "ענבים",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Grapes, raw"
+      ],
+      "expected_top1_id": "fdc:2709237",
+      "expected_top1_name": "Grapes, raw"
+    },
+    {
+      "id": "fruit_strawberries_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "תותים",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Strawberries, raw"
+      ],
+      "expected_top1_id": "fdc:2709283",
+      "expected_top1_name": "Strawberries, raw"
+    },
+    {
+      "id": "fruit_blueberries_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "אוכמניות",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Blueberries, raw"
+      ],
+      "expected_top1_id": "fdc:2709275",
+      "expected_top1_name": "Blueberries, raw"
+    },
+    {
+      "id": "fruit_peach_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "אפרסק",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Peach, raw",
+        "Peaches, raw"
+      ],
+      "expected_top1_id": "fdc:2709249",
+      "expected_top1_name": "Peach, raw"
+    },
+    {
+      "id": "fruit_peach_unknown_en",
+      "category": "fruits",
+      "language": "en",
+      "query": "peach",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Peach, raw",
+        "Peaches, raw"
+      ],
+      "expected_top1_id": "fdc:2709249",
+      "expected_top1_name": "Peach, raw"
+    },
+    {
+      "id": "fruit_mango_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "מנגו",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Mango, raw",
+        "Mangos, raw"
+      ],
+      "expected_top1_id": "fdc:2709242",
+      "expected_top1_name": "Mango, raw"
+    },
+    {
+      "id": "fruit_mango_unknown_en",
+      "category": "fruits",
+      "language": "en",
+      "query": "mango",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Mango, raw",
+        "Mangos, raw"
+      ],
+      "expected_top1_id": "fdc:2709242",
+      "expected_top1_name": "Mango, raw"
+    },
+    {
+      "id": "fruit_pear_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "אגס",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Pear, raw",
+        "Pears, raw"
+      ],
+      "expected_top1_id": "fdc:2709254",
+      "expected_top1_name": "Pear, raw"
+    },
+    {
+      "id": "fruit_plum_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "שזיף",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Plum, raw",
+        "Plums, raw"
+      ],
+      "expected_top1_id": "fdc:2709265",
+      "expected_top1_name": "Plum, raw"
+    },
+    {
+      "id": "fruit_pineapple_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "אננס",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Pineapple, raw"
+      ],
+      "expected_top1_id": "fdc:2709260",
+      "expected_top1_name": "Pineapple, raw"
+    },
+    {
+      "id": "fruit_kiwi_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "קיווי",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Kiwi fruit, raw",
+        "Kiwifruit, green, raw"
+      ],
+      "expected_top1_id": "fdc:2709239",
+      "expected_top1_name": "Kiwi fruit, raw"
+    },
+    {
+      "id": "fruit_pomegranate_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "רימון",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Pomegranate, raw",
+        "Pomegranates, raw"
+      ],
+      "expected_top1_id": "fdc:2709267",
+      "expected_top1_name": "Pomegranate, raw"
+    },
+    {
+      "id": "fruit_dates_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "תמרים",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Date",
+        "Dates,"
+      ],
+      "expected_top1_id": "fdc:2709203",
+      "expected_top1_name": "Date"
+    },
+    {
+      "id": "fruit_clementine_he",
+      "category": "fruits",
+      "language": "he",
+      "query": "קלמנטינה",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Clementine, raw"
+      ],
+      "expected_top1_id": "fdc:2709164",
+      "expected_top1_name": "Clementine, raw"
+    },
+    {
+      "id": "meat_chicken_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "עוף",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Chicken, NS as to part",
+        "Chicken, broilers or fryers",
+        "Chicken breast,"
+      ],
+      "expected_top1_id": "fdc:2705953",
+      "expected_top1_name": "Chicken breast, NS as to cooking method, skin eaten"
+    },
+    {
+      "id": "meat_chicken_breast_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "חזה עוף",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Chicken breast, NS as to cooking method",
+        "Chicken breast, baked, broiled, or roasted",
+        "Chicken, broilers or fryers, breast, meat only, cooked"
+      ],
+      "expected_top1_id": "fdc:2705953",
+      "expected_top1_name": "Chicken breast, NS as to cooking method, skin eaten"
+    },
+    {
+      "id": "meat_chicken_breast_grilled_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "חזה עוף",
+      "preparation": "grilled",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Chicken, broiler or fryers, breast, skinless, boneless, meat only, cooked, grilled",
+        "Chicken breast, grilled"
+      ],
+      "expected_top1_id": "fdc:171534",
+      "expected_top1_name": "Chicken, broiler or fryers, breast, skinless, boneless, meat only, cooked, grilled"
+    },
+    {
+      "id": "meat_chicken_breast_cooked_en",
+      "category": "poultry_meat_fish",
+      "language": "en",
+      "query": "chicken breast",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Chicken breast, NS as to cooking method",
+        "Chicken breast, baked, broiled, or roasted",
+        "Chicken, broilers or fryers, breast, meat only, cooked"
+      ],
+      "expected_top1_id": "fdc:2705953",
+      "expected_top1_name": "Chicken breast, NS as to cooking method, skin eaten"
+    },
+    {
+      "id": "meat_chicken_thigh_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "פרגית",
+      "preparation": "grilled",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Chicken thigh, grilled",
+        "Chicken thigh, NS as to cooking method",
+        "Chicken, broilers or fryers, thigh"
+      ],
+      "expected_top1_id": "fdc:2706027",
+      "expected_top1_name": "Chicken thigh, NS as to cooking method, skin eaten"
+    },
+    {
+      "id": "meat_chicken_drumstick_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "שוק עוף",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Chicken drumstick, NS as to cooking method",
+        "Chicken drumstick, baked, broiled, or roasted",
+        "Chicken, broilers or fryers, drumstick"
+      ],
+      "expected_top1_id": "fdc:2706000",
+      "expected_top1_name": "Chicken drumstick, NS as to cooking method, skin eaten"
+    },
+    {
+      "id": "meat_turkey_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "הודו",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Turkey, NFS",
+        "Turkey, light meat",
+        "Turkey, all classes"
+      ],
+      "expected_top1_id": "fdc:2706104",
+      "expected_top1_name": "Turkey, NFS"
+    },
+    {
+      "id": "meat_beef_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "בקר",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Beef, NFS",
+        "Beef, ground",
+        "Beef, steak"
+      ],
+      "expected_top1_id": "fdc:2705822",
+      "expected_top1_name": "Beef, NFS"
+    },
+    {
+      "id": "meat_ground_beef_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "בשר טחון",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Beef, ground"
+      ],
+      "expected_top1_id": "fdc:2705854",
+      "expected_top1_name": "Beef, ground"
+    },
+    {
+      "id": "meat_steak_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "סטייק",
+      "preparation": "grilled",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Beef, steak",
+        "Steak, NS as to type of meat"
+      ],
+      "expected_top1_id": "fdc:2705823",
+      "expected_top1_name": "Steak, NS as to type of meat, NS as to fat eaten"
+    },
+    {
+      "id": "meat_steak_en",
+      "category": "poultry_meat_fish",
+      "language": "en",
+      "query": "steak",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Beef, steak",
+        "Steak, NS as to type of meat"
+      ],
+      "expected_top1_id": "fdc:2705823",
+      "expected_top1_name": "Steak, NS as to type of meat, NS as to fat eaten"
+    },
+    {
+      "id": "meat_hot_dog_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "נקניקייה",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Hot dog, NFS",
+        "Frankfurter",
+        "Beef sausage"
+      ],
+      "expected_top1_id": "fdc:2706166",
+      "expected_top1_name": "Hot dog, NFS"
+    },
+    {
+      "id": "fish_salmon_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "סלמון",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Fish, salmon, NFS",
+        "Fish, salmon, baked or broiled",
+        "Fish, salmon, grilled",
+        "Fish, salmon, Atlantic, farmed, cooked"
+      ],
+      "expected_top1_id": "fdc:2706285",
+      "expected_top1_name": "Fish, salmon, NFS"
+    },
+    {
+      "id": "fish_salmon_en",
+      "category": "poultry_meat_fish",
+      "language": "en",
+      "query": "salmon",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Fish, salmon, NFS",
+        "Fish, salmon, baked or broiled",
+        "Fish, salmon, grilled",
+        "Fish, salmon, Atlantic, farmed, cooked"
+      ],
+      "expected_top1_id": "fdc:2706285",
+      "expected_top1_name": "Fish, salmon, NFS"
+    },
+    {
+      "id": "fish_tuna_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "טונה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Fish, tuna, NFS",
+        "Fish, tuna, canned",
+        "Fish, tuna, cooked",
+        "Fish, tuna, light, canned"
+      ],
+      "expected_top1_id": "fdc:2706309",
+      "expected_top1_name": "Fish, tuna, NFS"
+    },
+    {
+      "id": "fish_tuna_en",
+      "category": "poultry_meat_fish",
+      "language": "en",
+      "query": "tuna",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Fish, tuna, NFS",
+        "Fish, tuna, canned",
+        "Fish, tuna, cooked",
+        "Fish, tuna, light, canned"
+      ],
+      "expected_top1_id": "fdc:2706309",
+      "expected_top1_name": "Fish, tuna, NFS"
+    },
+    {
+      "id": "fish_tilapia_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "אמנון",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Fish, tilapia, NFS",
+        "Fish, tilapia, baked or broiled",
+        "Fish, tilapia, cooked"
+      ],
+      "expected_top1_id": "fdc:2706318",
+      "expected_top1_name": "Fish, tilapia, NFS"
+    },
+    {
+      "id": "fish_tilapia_musht_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "מושט",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Fish, tilapia, NFS",
+        "Fish, tilapia, baked or broiled",
+        "Fish, tilapia, cooked"
+      ],
+      "expected_top1_id": "fdc:2706318",
+      "expected_top1_name": "Fish, tilapia, NFS"
+    },
+    {
+      "id": "fish_tilapia_en",
+      "category": "poultry_meat_fish",
+      "language": "en",
+      "query": "tilapia",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Fish, tilapia, NFS",
+        "Fish, tilapia, baked or broiled",
+        "Fish, tilapia, cooked"
+      ],
+      "expected_top1_id": "fdc:2706318",
+      "expected_top1_name": "Fish, tilapia, NFS"
+    },
+    {
+      "id": "fish_sardines_he",
+      "category": "poultry_meat_fish",
+      "language": "he",
+      "query": "סרדינים",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Fish, sardines, canned",
+        "Fish, sardine, Atlantic, canned"
+      ],
+      "expected_top1_id": "fdc:2706293",
+      "expected_top1_name": "Fish, sardines, canned"
+    },
+    {
+      "id": "dairy_cottage_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "קוטג'",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, cottage, NFS",
+        "Cheese, cottage"
+      ],
+      "expected_top1_id": "fdc:2705747",
+      "expected_top1_name": "Cheese, cottage, NFS"
+    },
+    {
+      "id": "dairy_cottage_construct_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "גבינת קוטג'",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, cottage, NFS",
+        "Cheese, cottage"
+      ],
+      "expected_top1_id": "fdc:2705747",
+      "expected_top1_name": "Cheese, cottage, NFS"
+    },
+    {
+      "id": "dairy_feta_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "פטה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, feta",
+        "Cheese, Feta"
+      ],
+      "expected_top1_id": "fdc:2705714",
+      "expected_top1_name": "Cheese, Feta"
+    },
+    {
+      "id": "dairy_bulgarit_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "גבינה בולגרית",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, feta",
+        "Cheese, Feta"
+      ],
+      "expected_top1_id": "fdc:2705714",
+      "expected_top1_name": "Cheese, Feta"
+    },
+    {
+      "id": "dairy_feta_en",
+      "category": "dairy",
+      "language": "en",
+      "query": "feta",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, feta",
+        "Cheese, Feta"
+      ],
+      "expected_top1_id": "fdc:2705714",
+      "expected_top1_name": "Cheese, Feta"
+    },
+    {
+      "id": "dairy_yellow_cheese_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "גבינה צהובה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, Gouda or Edam",
+        "Cheese, edam",
+        "Cheese, gouda",
+        "Cheese, Swiss",
+        "Cheese, Cheddar"
+      ],
+      "expected_top1_id": "fdc:171241",
+      "expected_top1_name": "Cheese, gouda"
+    },
+    {
+      "id": "dairy_cheddar_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "צ'דר",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, Cheddar",
+        "Cheese, cheddar"
+      ],
+      "expected_top1_id": "fdc:2705709",
+      "expected_top1_name": "Cheese, Cheddar"
+    },
+    {
+      "id": "dairy_cheddar_en",
+      "category": "dairy",
+      "language": "en",
+      "query": "cheddar",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, Cheddar",
+        "Cheese, cheddar"
+      ],
+      "expected_top1_id": "fdc:2705709",
+      "expected_top1_name": "Cheese, Cheddar"
+    },
+    {
+      "id": "dairy_mozzarella_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "מוצרלה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, Mozzarella, NFS",
+        "Cheese, mozzarella"
+      ],
+      "expected_top1_id": "fdc:2705722",
+      "expected_top1_name": "Cheese, Mozzarella, NFS"
+    },
+    {
+      "id": "dairy_mozzarella_en",
+      "category": "dairy",
+      "language": "en",
+      "query": "mozzarella",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, Mozzarella, NFS",
+        "Cheese, mozzarella"
+      ],
+      "expected_top1_id": "fdc:2705722",
+      "expected_top1_name": "Cheese, Mozzarella, NFS"
+    },
+    {
+      "id": "dairy_ricotta_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "ריקוטה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, Ricotta",
+        "Cheese, ricotta"
+      ],
+      "expected_top1_id": "fdc:2705750",
+      "expected_top1_name": "Cheese, Ricotta"
+    },
+    {
+      "id": "dairy_parmesan_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "פרמזן",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, parmesan",
+        "Cheese, Parmesan"
+      ],
+      "expected_top1_id": "fdc:2705730",
+      "expected_top1_name": "Cheese, Parmesan, hard"
+    },
+    {
+      "id": "dairy_cream_cheese_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "גבינת שמנת",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cheese, cream",
+        "Cream cheese, regular, plain"
+      ],
+      "expected_top1_id": "fdc:173418",
+      "expected_top1_name": "Cheese, cream"
+    },
+    {
+      "id": "dairy_yogurt_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "יוגורט",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Yogurt, NFS",
+        "Yogurt, plain"
+      ],
+      "expected_top1_id": "fdc:2705414",
+      "expected_top1_name": "Yogurt, NFS"
+    },
+    {
+      "id": "dairy_milk_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "חלב",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Milk, NFS",
+        "Milk, whole",
+        "Milk, reduced fat"
+      ],
+      "expected_top1_id": "fdc:2705384",
+      "expected_top1_name": "Milk, NFS"
+    },
+    {
+      "id": "dairy_butter_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "חמאה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Butter, NFS",
+        "Butter, stick"
+      ],
+      "expected_top1_id": "fdc:2710154",
+      "expected_top1_name": "Butter, NFS"
+    },
+    {
+      "id": "dairy_sour_cream_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "שמנת חמוצה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Sour cream, regular",
+        "Sour cream, light",
+        "Sour cream, reduced fat"
+      ],
+      "expected_top1_id": "fdc:2705614",
+      "expected_top1_name": "Sour cream, regular"
+    },
+    {
+      "id": "dairy_ice_cream_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "גלידה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Ice cream, NFS",
+        "Ice cream,"
+      ],
+      "expected_top1_id": "fdc:2705629",
+      "expected_top1_name": "Ice cream, NFS"
+    },
+    {
+      "id": "dairy_tofu_he",
+      "category": "dairy",
+      "language": "he",
+      "query": "טופו",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tofu, firm",
+        "Tofu, soft",
+        "Tofu, fried",
+        "Tofu,"
+      ],
+      "expected_top1_id": "fdc:174291",
+      "expected_top1_name": "Tofu, hard, prepared with nigari"
+    },
+    {
+      "id": "grain_bread_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "לחם",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Bread, white",
+        "Bread, whole wheat",
+        "Bread, whole-wheat",
+        "Bread, wheat"
+      ],
+      "expected_top1_id": "fdc:2707598",
+      "expected_top1_name": "Bread, white"
+    },
+    {
+      "id": "grain_bread_en",
+      "category": "grains_legumes",
+      "language": "en",
+      "query": "bread",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Bread, white",
+        "Bread, whole wheat",
+        "Bread, whole-wheat",
+        "Bread, wheat"
+      ],
+      "expected_top1_id": "fdc:2707598",
+      "expected_top1_name": "Bread, white"
+    },
+    {
+      "id": "grain_white_bread_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "לחם לבן",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Bread, white"
+      ],
+      "expected_top1_id": "fdc:2707598",
+      "expected_top1_name": "Bread, white"
+    },
+    {
+      "id": "grain_whole_bread_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "לחם מלא",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Bread, whole wheat",
+        "Bread, whole-wheat"
+      ],
+      "expected_top1_id": "fdc:2707709",
+      "expected_top1_name": "Bread, whole wheat"
+    },
+    {
+      "id": "grain_roll_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "לחמנייה",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Bread, roll",
+        "Roll, white"
+      ],
+      "expected_top1_id": "fdc:174078",
+      "expected_top1_name": "Bread, roll, Mexican, bollilo"
+    },
+    {
+      "id": "grain_bagel_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "בייגל",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Bagel",
+        "Bagels,"
+      ],
+      "expected_top1_id": "fdc:2707684",
+      "expected_top1_name": "Bagel"
+    },
+    {
+      "id": "grain_tortilla_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "טורטייה",
+      "preparation": "baked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tortilla, NFS",
+        "Tortillas,"
+      ],
+      "expected_top1_id": "fdc:2707822",
+      "expected_top1_name": "Tortilla, NFS"
+    },
+    {
+      "id": "grain_rice_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "אורז",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Rice, cooked, NFS",
+        "Rice, white, cooked"
+      ],
+      "expected_top1_id": "fdc:2708402",
+      "expected_top1_name": "Rice, cooked, NFS"
+    },
+    {
+      "id": "grain_white_rice_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "אורז לבן",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Rice, white, cooked, NS as to fat",
+        "Rice, white, cooked, no added fat",
+        "Rice, white, long-grain, regular, enriched, cooked",
+        "Rice, white, medium-grain, enriched, cooked",
+        "Rice, white, short-grain, enriched, cooked"
+      ],
+      "expected_top1_id": "fdc:2708408",
+      "expected_top1_name": "Rice, white, cooked, no added fat"
+    },
+    {
+      "id": "grain_white_rice_en",
+      "category": "grains_legumes",
+      "language": "en",
+      "query": "white rice",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Rice, white, cooked, NS as to fat",
+        "Rice, white, cooked, no added fat",
+        "Rice, white, long-grain, regular, enriched, cooked",
+        "Rice, white, medium-grain, enriched, cooked",
+        "Rice, white, short-grain, enriched, cooked"
+      ],
+      "expected_top1_id": "fdc:2708408",
+      "expected_top1_name": "Rice, white, cooked, no added fat"
+    },
+    {
+      "id": "grain_brown_rice_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "אורז מלא",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Rice, brown, cooked, NS as to fat",
+        "Rice, brown, cooked, no added fat",
+        "Rice, brown, long-grain, cooked",
+        "Rice, brown, medium-grain, cooked"
+      ],
+      "expected_top1_id": "fdc:2708414",
+      "expected_top1_name": "Rice, brown, cooked, no added fat"
+    },
+    {
+      "id": "grain_brown_rice_en",
+      "category": "grains_legumes",
+      "language": "en",
+      "query": "brown rice",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Rice, brown, cooked, NS as to fat",
+        "Rice, brown, cooked, no added fat",
+        "Rice, brown, long-grain, cooked",
+        "Rice, brown, medium-grain, cooked"
+      ],
+      "expected_top1_id": "fdc:2708414",
+      "expected_top1_name": "Rice, brown, cooked, no added fat"
+    },
+    {
+      "id": "grain_pasta_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "פסטה",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Pasta, cooked"
+      ],
+      "expected_top1_id": "fdc:2708357",
+      "expected_top1_name": "Pasta, cooked"
+    },
+    {
+      "id": "grain_spaghetti_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "ספגטי",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Pasta, cooked",
+        "Spaghetti, cooked",
+        "Spaghetti, protein-fortified, cooked"
+      ],
+      "expected_top1_id": "fdc:2708357",
+      "expected_top1_name": "Pasta, cooked"
+    },
+    {
+      "id": "grain_spaghetti_en",
+      "category": "grains_legumes",
+      "language": "en",
+      "query": "spaghetti",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Pasta, cooked",
+        "Spaghetti, cooked",
+        "Spaghetti, protein-fortified, cooked"
+      ],
+      "expected_top1_id": "fdc:2708357",
+      "expected_top1_name": "Pasta, cooked"
+    },
+    {
+      "id": "grain_quinoa_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "קינואה",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Quinoa, cooked"
+      ],
+      "expected_top1_id": "fdc:168917",
+      "expected_top1_name": "Quinoa, cooked"
+    },
+    {
+      "id": "grain_oatmeal_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "שיבולת שועל",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Oatmeal, NFS",
+        "Oatmeal, regular or quick",
+        "Oats, raw"
+      ],
+      "expected_top1_id": "fdc:2708380",
+      "expected_top1_name": "Oatmeal, NFS"
+    },
+    {
+      "id": "grain_buckwheat_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "כוסמת",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Buckwheat",
+        "Buckwheat groats, roasted, cooked"
+      ],
+      "expected_top1_id": "fdc:170286",
+      "expected_top1_name": "Buckwheat"
+    },
+    {
+      "id": "legume_lentils_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "עדשים",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Lentils, NFS",
+        "Lentils, mature seeds, cooked"
+      ],
+      "expected_top1_id": "fdc:2707423",
+      "expected_top1_name": "Lentils, NFS"
+    },
+    {
+      "id": "legume_chickpeas_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "גרגירי חומוס",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Chickpeas, NFS",
+        "Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked"
+      ],
+      "expected_top1_id": "fdc:2707414",
+      "expected_top1_name": "Chickpeas, NFS"
+    },
+    {
+      "id": "legume_beans_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "שעועית",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Beans, NFS",
+        "White beans, NFS"
+      ],
+      "expected_top1_id": "fdc:2707347",
+      "expected_top1_name": "Beans, NFS"
+    },
+    {
+      "id": "legume_white_beans_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "שעועית לבנה",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "White beans, NFS",
+        "Beans, white, mature seeds, cooked"
+      ],
+      "expected_top1_id": "fdc:2707353",
+      "expected_top1_name": "White beans, NFS"
+    },
+    {
+      "id": "legume_edamame_he",
+      "category": "grains_legumes",
+      "language": "he",
+      "query": "אדממה",
+      "preparation": "cooked",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Edamame, cooked"
+      ],
+      "expected_top1_id": "fdc:2707436",
+      "expected_top1_name": "Edamame, cooked"
+    },
+    {
+      "id": "nut_almonds_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "שקדים",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Almonds, NFS",
+        "Almonds, unroasted",
+        "Nuts, almonds"
+      ],
+      "expected_top1_id": "fdc:2707486",
+      "expected_top1_name": "Almonds, unroasted"
+    },
+    {
+      "id": "nut_walnuts_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "אגוזי מלך",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Nuts, walnuts, english",
+        "Walnuts, excluding honey roasted"
+      ],
+      "expected_top1_id": "fdc:170187",
+      "expected_top1_name": "Nuts, walnuts, english"
+    },
+    {
+      "id": "nut_walnuts_en",
+      "category": "nuts_oils_drinks",
+      "language": "en",
+      "query": "walnuts",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Walnuts, excluding honey roasted",
+        "Nuts, walnuts, english"
+      ],
+      "expected_top1_id": "fdc:2707531",
+      "expected_top1_name": "Walnuts, excluding honey roasted"
+    },
+    {
+      "id": "nut_peanuts_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "בוטנים",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Peanuts, NFS",
+        "Peanuts, unroasted",
+        "Peanuts, all types, raw"
+      ],
+      "expected_top1_id": "fdc:2707514",
+      "expected_top1_name": "Peanuts, unroasted"
+    },
+    {
+      "id": "nut_peanut_butter_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "חמאת בוטנים",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Peanut butter"
+      ],
+      "expected_top1_id": "fdc:2707537",
+      "expected_top1_name": "Peanut butter"
+    },
+    {
+      "id": "nut_cashews_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "קשיו",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Cashews, NFS",
+        "Cashews, unroasted",
+        "Nuts, cashew nuts, raw"
+      ],
+      "expected_top1_id": "fdc:2707494",
+      "expected_top1_name": "Cashews, unroasted"
+    },
+    {
+      "id": "nut_pistachios_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "פיסטוק",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Pistachio nuts, NFS",
+        "Nuts, pistachio nuts, raw"
+      ],
+      "expected_top1_id": "fdc:170184",
+      "expected_top1_name": "Nuts, pistachio nuts, raw"
+    },
+    {
+      "id": "nut_pecans_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "אגוזי פקאן",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Pecans, NFS",
+        "Pecans, unroasted",
+        "Nuts, pecans"
+      ],
+      "expected_top1_id": "fdc:2707522",
+      "expected_top1_name": "Pecans, unroasted"
+    },
+    {
+      "id": "seed_sunflower_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "גרעיני חמנייה",
+      "preparation": "raw",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Sunflower seeds, NFS",
+        "Sunflower seeds, plain, unroasted",
+        "Seeds, sunflower seed kernels"
+      ],
+      "expected_top1_id": "fdc:2707585",
+      "expected_top1_name": "Sunflower seeds, NFS"
+    },
+    {
+      "id": "seed_chia_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "זרעי צ'יה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Chia seeds",
+        "Seeds, chia seeds, dried"
+      ],
+      "expected_top1_id": "fdc:2707590",
+      "expected_top1_name": "Chia seeds"
+    },
+    {
+      "id": "seed_flax_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "זרעי פשתן",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Flax seeds",
+        "Seeds, flaxseed"
+      ],
+      "expected_top1_id": "fdc:169414",
+      "expected_top1_name": "Seeds, flaxseed"
+    },
+    {
+      "id": "oil_olive_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "שמן זית",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Olive oil",
+        "Oil, olive"
+      ],
+      "expected_top1_id": "fdc:2710186",
+      "expected_top1_name": "Olive oil"
+    },
+    {
+      "id": "oil_canola_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "שמן קנולה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Canola oil",
+        "Oil, canola"
+      ],
+      "expected_top1_id": "fdc:2710188",
+      "expected_top1_name": "Canola oil"
+    },
+    {
+      "id": "cond_mayo_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "מיונז",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Mayonnaise, regular"
+      ],
+      "expected_top1_id": "fdc:2710204",
+      "expected_top1_name": "Mayonnaise, regular"
+    },
+    {
+      "id": "cond_ketchup_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "קטשופ",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Ketchup",
+        "Catsup"
+      ],
+      "expected_top1_id": "fdc:2709733",
+      "expected_top1_name": "Ketchup"
+    },
+    {
+      "id": "cond_mustard_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "חרדל",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Mustard"
+      ],
+      "expected_top1_id": "fdc:2710085",
+      "expected_top1_name": "Mustard"
+    },
+    {
+      "id": "cond_honey_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "דבש",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Honey"
+      ],
+      "expected_top1_id": "fdc:2710281",
+      "expected_top1_name": "Honey"
+    },
+    {
+      "id": "cond_dark_chocolate_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "שוקולד מריר",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Chocolate, dark"
+      ],
+      "expected_top1_id": "fdc:170273",
+      "expected_top1_name": "Chocolate, dark, 70-85% cacao solids"
+    },
+    {
+      "id": "drink_coffee_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "קפה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Coffee, brewed",
+        "Beverages, coffee, brewed"
+      ],
+      "expected_top1_id": "fdc:2710375",
+      "expected_top1_name": "Coffee, brewed"
+    },
+    {
+      "id": "drink_black_coffee_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "קפה שחור",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Coffee, Turkish",
+        "Coffee, brewed"
+      ],
+      "expected_top1_id": "fdc:2710377",
+      "expected_top1_name": "Coffee, Turkish"
+    },
+    {
+      "id": "drink_coffee_en",
+      "category": "nuts_oils_drinks",
+      "language": "en",
+      "query": "coffee",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Coffee, brewed",
+        "Beverages, coffee, brewed"
+      ],
+      "expected_top1_id": "fdc:2710375",
+      "expected_top1_name": "Coffee, brewed"
+    },
+    {
+      "id": "drink_espresso_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "אספרסו",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Coffee, espresso",
+        "Beverages, coffee, brewed, espresso"
+      ],
+      "expected_top1_id": "fdc:2710378",
+      "expected_top1_name": "Coffee, espresso"
+    },
+    {
+      "id": "drink_cappuccino_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "קפוצ'ינו",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Coffee, Cappuccino"
+      ],
+      "expected_top1_id": "fdc:2710472",
+      "expected_top1_name": "Coffee, Cappuccino"
+    },
+    {
+      "id": "drink_hafuch_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "קפה הפוך",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Coffee, Latte",
+        "Coffee, Cappuccino"
+      ],
+      "expected_top1_id": "fdc:2710386",
+      "expected_top1_name": "Coffee, Latte"
+    },
+    {
+      "id": "drink_tea_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "תה",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tea, hot, leaf, black",
+        "Tea, hot, herbal",
+        "Beverages, tea, black, brewed"
+      ],
+      "expected_top1_id": "fdc:2710488",
+      "expected_top1_name": "Tea, hot, leaf, black"
+    },
+    {
+      "id": "drink_green_tea_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "תה ירוק",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tea, hot, leaf, green",
+        "Beverages, tea, green, brewed"
+      ],
+      "expected_top1_id": "fdc:2710490",
+      "expected_top1_name": "Tea, hot, leaf, green"
+    },
+    {
+      "id": "drink_tea_en",
+      "category": "nuts_oils_drinks",
+      "language": "en",
+      "query": "tea",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Tea, hot, leaf, black",
+        "Tea, hot, herbal",
+        "Beverages, tea, black, brewed"
+      ],
+      "expected_top1_id": "fdc:2710488",
+      "expected_top1_name": "Tea, hot, leaf, black"
+    },
+    {
+      "id": "drink_orange_juice_he",
+      "category": "nuts_oils_drinks",
+      "language": "he",
+      "query": "מיץ תפוזים",
+      "preparation": "unknown",
+      "expected_mode": "match",
+      "acceptable_prefixes": [
+        "Orange juice, 100%, NFS",
+        "Orange juice, raw"
+      ],
+      "expected_top1_id": "fdc:2709186",
+      "expected_top1_name": "Orange juice, 100%, NFS"
+    },
+    {
+      "id": "abstain_shakshuka_he",
+      "category": "abstention",
+      "language": "he",
+      "query": "שקשוקה",
+      "preparation": "cooked",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_sabich_he",
+      "category": "abstention",
+      "language": "he",
+      "query": "סביח",
+      "preparation": "unknown",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_bourekas_he",
+      "category": "abstention",
+      "language": "he",
+      "query": "בורקס",
+      "preparation": "baked",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_malawach_he",
+      "category": "abstention",
+      "language": "he",
+      "query": "מלאווח",
+      "preparation": "fried",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_jachnun_he",
+      "category": "abstention",
+      "language": "he",
+      "query": "ג׳חנון",
+      "preparation": "baked",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_kubbeh_he",
+      "category": "abstention",
+      "language": "he",
+      "query": "קובה",
+      "preparation": "cooked",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_bamba_he",
+      "category": "abstention",
+      "language": "he",
+      "query": "במבה",
+      "preparation": "unknown",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_labneh_he",
+      "category": "abstention",
+      "language": "he",
+      "query": "לבנה",
+      "preparation": "unknown",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_shawarma_he",
+      "category": "abstention",
+      "language": "he",
+      "query": "שווארמה",
+      "preparation": "cooked",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_kebab_he",
+      "category": "abstention",
+      "language": "he",
+      "query": "קבב",
+      "preparation": "grilled",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_tahini_sauce_en",
+      "category": "abstention",
+      "language": "en",
+      "query": "tahini sauce",
+      "preparation": "unknown",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_vegan_omelette_en",
+      "category": "abstention",
+      "language": "en",
+      "query": "vegan omelette",
+      "preparation": "fried",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_omelette_cheese_unspecified_fat_en",
+      "category": "abstention",
+      "language": "en",
+      "query": "omelette with cheese",
+      "preparation": "fried",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_zaatar_pita_he",
+      "category": "abstention",
+      "language": "he",
+      "query": "פיתה עם זעתר",
+      "preparation": "baked",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    },
+    {
+      "id": "abstain_ptitim_he",
+      "category": "abstention",
+      "language": "he",
+      "query": "פתיתים",
+      "preparation": "cooked",
+      "expected_mode": "abstain",
+      "acceptable_prefixes": []
+    }
+  ]
+}

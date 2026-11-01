@@ -20,6 +20,7 @@ import subprocess
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi.testclient import TestClient
@@ -140,13 +141,54 @@ EXPECTED_TABLES: tuple[str, ...] = (
 
 REQUIRED_NUTRITION_COMMITS: tuple[str, ...] = ("089f789", "3658a17", "4a9d6b6")
 STAGING_PROJECT_ID = "gen-lang-client-0101662511"
-STAGING_SERVICE_ID = "srv-dbbiamm1egvs7384stu0"
-PRODUCTION_SERVICE_ID = "srv-db3raa3ncjis73bh20p0"
+STAGING_SERVICE_IDS: tuple[str, ...] = (
+    "srv-d6q78f450q8c73f3376g",
+    "srv-dbbiamm1egvs7384stu0",
+)
+PRODUCTION_SERVICE_IDS: tuple[str, ...] = (
+    "srv-d6q76n5m5p6s73f9k590",
+    "srv-db3raa3ncjis73bh20p0",
+)
+EXPIRING_STAGING_DB_IDS: tuple[str, ...] = (
+    "dpg-d6q76n5m5p6s73f9k58g-a",
+    "dpg-dbbhudvavr4c73duk09g-a",
+)
+APPROVED_STAGING_HOSTS: tuple[str, ...] = (
+    "foodlogger-staging.onrender.com",
+    "biteflow-staging-api.onrender.com",
+)
+FORBIDDEN_PRODUCTION_IDENTIFIERS: tuple[str, ...] = (
+    "foodlogger.onrender.com",
+    "srv-d6q76n5m5p6s73f9k590",
+    "srv-db3raa3ncjis73bh20p0",
+    "slnmporlcbqnnkyebdmv",
+    "supabase.co",
+    "supabase.com",
+    "car_log",
+)
 
 ROLE_VERIFICATION_SQL = """
-SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls, rolinherit
+SELECT
+    current_user AS current_user,
+    session_user AS session_user,
+    rolname,
+    rolsuper,
+    rolcreatedb,
+    rolcreaterole,
+    rolbypassrls,
+    rolinherit,
+    (
+        SELECT count(*)
+        FROM pg_tables
+        WHERE schemaname = 'public' AND tableowner = current_user
+    ) AS public_owned_tables,
+    (
+        SELECT count(*)
+        FROM pg_tables
+        WHERE schemaname IN ('public', 'foodlogger') AND tableowner = current_user
+    ) AS total_owned_tables
 FROM pg_roles
-WHERE rolname = 'foodlogger_app'
+WHERE rolname = current_user
 """.strip()
 
 RLS_TABLES_VERIFICATION_SQL = """
@@ -162,6 +204,134 @@ SELECT ssl, version, cipher
 FROM pg_stat_ssl
 WHERE pid = pg_backend_pid()
 """.strip()
+
+
+def validate_staging_origin(
+    origin: str,
+    *,
+    allow_staging_host: str | None = None,
+) -> str:
+    """Validate that a hosted target URL uses HTTPS and points only to staging."""
+    if not origin or not isinstance(origin, str):
+        raise ValueError("Staging origin URL must be a non-empty string")
+    parsed = urlsplit(origin.strip())
+    if parsed.scheme.lower() != "https":
+        raise ValueError(f"Staging origin must use https:// (got scheme={parsed.scheme!r})")
+    if parsed.username or parsed.password:
+        raise ValueError("Staging origin must not embed credentials")
+    hostname = (parsed.hostname or "").strip().lower()
+    if not hostname:
+        raise ValueError("Staging origin must include a hostname")
+
+    for forbidden in FORBIDDEN_PRODUCTION_IDENTIFIERS:
+        if forbidden in hostname or forbidden in origin.lower():
+            raise ValueError(
+                f"Refusing to run staging smoke/cutover against production identifier: {forbidden}"
+            )
+
+    allowed_hosts = set(APPROVED_STAGING_HOSTS)
+    if allow_staging_host:
+        override = allow_staging_host.strip().lower()
+        for forbidden in FORBIDDEN_PRODUCTION_IDENTIFIERS:
+            if forbidden in override:
+                raise ValueError(
+                    f"--allow-staging-host cannot override production identifier: {forbidden}"
+                )
+        allowed_hosts.add(override)
+
+    if hostname not in allowed_hosts:
+        raise ValueError(
+            f"Unapproved staging host {hostname!r}; expected one of {sorted(allowed_hosts)}"
+        )
+    return f"https://{parsed.netloc}"
+
+
+def _parse_postgres_dsn(dsn: str, label: str) -> dict:
+    if not dsn or not isinstance(dsn, str):
+        raise ValueError(f"{label} must be a non-empty PostgreSQL URL")
+    parsed = urlsplit(dsn.strip())
+    if parsed.scheme.lower() not in ("postgresql", "postgres"):
+        raise ValueError(f"{label} must use postgresql:// scheme")
+    host = (parsed.hostname or "").strip().lower()
+    port = parsed.port or 5432
+    dbname = parsed.path.lstrip("/").strip()
+    username = parsed.username or ""
+    password = parsed.password or ""
+    if not host or not dbname:
+        raise ValueError(f"{label} must include both hostname and database name")
+    return {
+        "host": host,
+        "port": port,
+        "dbname": dbname,
+        "username": username,
+        "password": password,
+    }
+
+
+def validate_cutover_database_urls(
+    owner_dsn: str,
+    app_dsn: str,
+    *,
+    old_dsn: str | None = None,
+) -> dict:
+    """Ensure admin and app URLs target the exact same replacement staging database."""
+    owner_info = _parse_postgres_dsn(owner_dsn, "admin_database_url")
+    app_info = _parse_postgres_dsn(app_dsn, "app_database_url")
+
+    for label, raw_dsn, info in (
+        ("admin_database_url", owner_dsn, owner_info),
+        ("app_database_url", app_dsn, app_info),
+    ):
+        lowered = raw_dsn.lower()
+        for forbidden in FORBIDDEN_PRODUCTION_IDENTIFIERS:
+            if (
+                forbidden in info["host"]
+                or forbidden in info["dbname"].lower()
+                or forbidden in lowered
+            ):
+                raise ValueError(f"{label} matches forbidden production identifier {forbidden!r}")
+        for old_id in EXPIRING_STAGING_DB_IDS:
+            if old_id in info["host"] or old_id in lowered:
+                raise ValueError(
+                    f"{label} points to expiring staging database {old_id!r}; "
+                    "cutover requires a replacement staging database"
+                )
+
+    owner_target = (owner_info["host"], owner_info["port"], owner_info["dbname"])
+    app_target = (app_info["host"], app_info["port"], app_info["dbname"])
+    if owner_target != app_target:
+        raise ValueError(
+            "admin_database_url and app_database_url must target the exact same "
+            f"(host, port, dbname); got {owner_target} vs {app_target}"
+        )
+
+    if not owner_info["username"]:
+        raise ValueError("admin_database_url must specify an owner username")
+    if app_info["username"] != "foodlogger_app":
+        raise ValueError(
+            f"app_database_url must authenticate as 'foodlogger_app' (got {app_info['username']!r})"
+        )
+    if owner_info["username"] == app_info["username"]:
+        raise ValueError(
+            "admin_database_url and app_database_url must use distinct roles "
+            "(owner vs foodlogger_app)"
+        )
+
+    if old_dsn:
+        old_info = _parse_postgres_dsn(old_dsn, "old_database_url")
+        old_target = (old_info["host"], old_info["port"], old_info["dbname"])
+        if old_target == owner_target or old_info["host"] == owner_info["host"]:
+            raise ValueError(
+                "old_database_url and replacement target database must not be the same instance"
+            )
+
+    return {
+        "host": owner_info["host"],
+        "port": owner_info["port"],
+        "dbname": owner_info["dbname"],
+        "admin_user": owner_info["username"],
+        "app_user": app_info["username"],
+    }
 
 
 def build_staging_ai_policy(verified_at: datetime | None = None) -> BudgetPolicy:
@@ -320,8 +490,10 @@ def apply_migrations_to_sqlite(db_path: Path, root: Path = ROOT) -> dict:
         raise AssertionError(f"Expected 27 USDA serving conversions, got {servings_count}")
     return {
         "backend": "sqlite",
+        "rehearsal_mode": "offline_sqlite_translation_plus_static_rls_manifest_contract",
         "migration_count": len(verified_manifest),
         "tables_created": len(tables),
+        "static_rls_manifest_table_count": len(EXPECTED_TABLES),
         "tables": tables,
         "schema_version": version_row[0],
         "serving_conversions": servings_count,
@@ -359,25 +531,137 @@ def verify_tls_and_role_contract(sample_dsn: str | None = None) -> dict:
     }
 
 
-def verify_commit_and_nutrition_fixes(root: Path = ROOT) -> dict:
+def verify_commit_and_nutrition_fixes(
+    root: Path = ROOT,
+    target_commit: str = "HEAD",
+) -> dict:
     git_bin = shutil.which("git") or r"C:\Program Files\Git\cmd\git.exe"
     head_sha = None
     ancestors: dict[str, bool] = {}
     if Path(git_bin).exists():
         head_sha = subprocess.check_output(
-            [git_bin, "-C", str(root), "rev-parse", "HEAD"], text=True
+            [git_bin, "-C", str(root), "rev-parse", target_commit], text=True
         ).strip()
         for commit in REQUIRED_NUTRITION_COMMITS:
             res = subprocess.run(
-                [git_bin, "-C", str(root), "merge-base", "--is-ancestor", commit, "HEAD"],
+                [git_bin, "-C", str(root), "merge-base", "--is-ancestor", commit, head_sha],
                 capture_output=True,
             )
             ancestors[commit] = res.returncode == 0
         if not all(ancestors.values()):
-            raise AssertionError(f"Missing required nutrition commits in HEAD: {ancestors}")
+            raise AssertionError(
+                f"Missing required nutrition commits in {target_commit} ({head_sha}): {ancestors}"
+            )
     return {
         "head_sha": head_sha,
         "required_nutrition_commits": ancestors,
+    }
+
+
+def verify_deployed_commit_sha(
+    health_body: dict,
+    expected_commit: str,
+    *,
+    headers: dict | None = None,
+    root: Path = ROOT,
+) -> str:
+    """Verify /api/health deployed commit matches or descends from expected_commit."""
+    expected = (expected_commit or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{7,40}", expected):
+        raise ValueError(
+            f"expected_commit must be a 7-40 character hex git SHA (got {expected_commit!r})"
+        )
+    hdrs = {k.lower(): v for k, v in (headers or {}).items()}
+    reported_raw = (
+        health_body.get("commit")
+        or health_body.get("commit_sha")
+        or health_body.get("git_sha")
+        or health_body.get("sha")
+        or health_body.get("revision")
+        or hdrs.get("x-render-git-commit")
+        or hdrs.get("x-git-commit")
+    )
+    if not reported_raw or not isinstance(reported_raw, str):
+        raise AssertionError(
+            f"/api/health did not report a deployed commit SHA (expected {expected!r}, "
+            f"payload={health_body})"
+        )
+    reported = reported_raw.strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{7,40}", reported):
+        raise AssertionError(f"/api/health reported an invalid commit SHA: {reported_raw!r}")
+
+    prefix_match = reported.startswith(expected) or expected.startswith(reported)
+    descendant_match = False
+    git_bin = shutil.which("git") or r"C:\Program Files\Git\cmd\git.exe"
+    if not prefix_match and Path(git_bin).exists():
+        res = subprocess.run(
+            [git_bin, "-C", str(root), "merge-base", "--is-ancestor", expected, reported],
+            capture_output=True,
+        )
+        descendant_match = res.returncode == 0
+
+    if not (prefix_match or descendant_match):
+        raise AssertionError(
+            f"Deployed commit SHA mismatch on /api/health: reported {reported!r} "
+            f"does not match or descend from expected {expected!r}"
+        )
+
+    if Path(git_bin).exists():
+        cat = subprocess.run(
+            [git_bin, "-C", str(root), "cat-file", "-t", reported],
+            capture_output=True,
+            text=True,
+        )
+        if cat.returncode == 0:
+            verify_commit_and_nutrition_fixes(root, target_commit=reported)
+    return reported
+
+
+def verify_app_connection_posture(app_conn) -> dict:
+    """Verify TLS, current_user/session_user, 0 owned tables, and 36 RLS tables."""
+    tls_row = app_conn.execute(TLS_VERIFICATION_SQL).fetchone()
+    if not tls_row or not tls_row.get("ssl"):
+        raise AssertionError(f"TLS verification failed on app connection: {tls_row}")
+
+    role_row = app_conn.execute(ROLE_VERIFICATION_SQL).fetchone()
+    if not role_row:
+        raise AssertionError("Role verification query returned no rows on app connection")
+
+    current_user = role_row.get("current_user", role_row.get("rolname"))
+    session_user = role_row.get("session_user", current_user)
+    rolname = role_row.get("rolname")
+    if (
+        current_user != "foodlogger_app"
+        or session_user != "foodlogger_app"
+        or rolname != "foodlogger_app"
+    ):
+        raise AssertionError(
+            "App connection is not authenticated as non-owner role 'foodlogger_app': "
+            f"current_user={current_user!r}, session_user={session_user!r}, rolname={rolname!r}"
+        )
+
+    forbidden_flags = ("rolsuper", "rolcreatedb", "rolcreaterole", "rolbypassrls", "rolinherit")
+    if any(bool(role_row.get(k)) for k in forbidden_flags):
+        raise AssertionError(f"foodlogger_app has unexpected privilege flags: {role_row}")
+
+    public_owned = int(role_row.get("public_owned_tables", 0) or 0)
+    total_owned = int(role_row.get("total_owned_tables", 0) or 0)
+    if public_owned != 0 or total_owned != 0 or bool(role_row.get("tableowner")):
+        raise AssertionError(
+            "foodlogger_app must not own any tables in public or foodlogger schemas: "
+            f"public_owned_tables={public_owned}, total_owned_tables={total_owned}, row={role_row}"
+        )
+
+    rls_rows = app_conn.execute(RLS_TABLES_VERIFICATION_SQL).fetchall()
+    if [r["table_name"] for r in rls_rows] != list(EXPECTED_TABLES) or not all(
+        r["rls_enabled"] for r in rls_rows
+    ):
+        raise AssertionError("Not all 36 foodlogger tables have RLS enabled on app connection")
+
+    return {
+        "app_role": dict(role_row),
+        "tls": dict(tls_row),
+        "rls_tables": [dict(r) for r in rls_rows],
     }
 
 
@@ -398,7 +682,18 @@ class _SyntheticTextProvider:
         )
 
 
-def run_smoke_against_client(client, *, check_ai: bool = True) -> dict:
+def run_smoke_against_client(
+    client,
+    *,
+    check_ai: bool = True,
+    expected_commit: str | None = None,
+    allow_staging_host: str | None = None,
+    root: Path = ROOT,
+) -> dict:
+    base_url = str(getattr(client, "base_url", "") or "").rstrip("/")
+    if base_url and base_url != "http://testserver":
+        validate_staging_origin(base_url, allow_staging_host=allow_staging_host)
+
     checks: list[dict] = []
 
     def record(name: str, status: int, expected: int):
@@ -412,6 +707,24 @@ def run_smoke_against_client(client, *, check_ai: bool = True) -> dict:
     health_body = health.json()
     if health_body.get("status") != "ok":
         raise AssertionError(f"Unexpected /api/health payload: {health_body}")
+
+    verified_commit = None
+    if expected_commit is not None:
+        verified_commit = verify_deployed_commit_sha(
+            health_body,
+            expected_commit,
+            headers=dict(getattr(health, "headers", {}) or {}),
+            root=root,
+        )
+        checks.append(
+            {
+                "name": "deployed commit sha",
+                "status": 200,
+                "expected": expected_commit,
+                "reported": verified_commit,
+                "pass": True,
+            }
+        )
 
     unauth = client.get("/api/health/imports")
     record("unauthenticated health records", unauth.status_code, 401)
@@ -575,8 +888,40 @@ def run_smoke_against_client(client, *, check_ai: bool = True) -> dict:
         "check_count": len(checks),
         "checks": checks,
         "health": health_body,
+        "verified_commit": verified_commit,
         "ai_probe": ai_probe,
     }
+
+
+def run_hosted_smoke(
+    origin: str,
+    *,
+    expected_commit: str,
+    allow_live_ai: bool = False,
+    allow_staging_host: str | None = None,
+    client=None,
+    root: Path = ROOT,
+) -> dict:
+    """Validate staging origin and expected commit SHA before running hosted smoke."""
+    validated_origin = validate_staging_origin(origin, allow_staging_host=allow_staging_host)
+    if not expected_commit or not expected_commit.strip():
+        raise ValueError("hosted-smoke requires --expected-commit to verify /api/health SHA")
+    if client is not None:
+        return run_smoke_against_client(
+            client,
+            check_ai=allow_live_ai,
+            expected_commit=expected_commit,
+            allow_staging_host=allow_staging_host,
+            root=root,
+        )
+    with httpx.Client(base_url=validated_origin, timeout=30.0, trust_env=False) as http_client:
+        return run_smoke_against_client(
+            http_client,
+            check_ai=allow_live_ai,
+            expected_commit=expected_commit,
+            allow_staging_host=allow_staging_host,
+            root=root,
+        )
 
 
 def run_local_verification(root: Path = ROOT) -> dict:
@@ -632,6 +977,8 @@ def run_local_verification(root: Path = ROOT) -> dict:
     return {
         "verified_at": datetime.now(UTC).isoformat(),
         "mode": "local-verify",
+        "rehearsal_scope": "offline_sqlite_translation_plus_static_manifest_and_contract_checks",
+        "overall_pass": True,
         "blueprints": blueprints,
         "commits": commits,
         "migrations": migration_report,
@@ -644,16 +991,36 @@ def run_local_verification(root: Path = ROOT) -> dict:
 def apply_postgres_cutover(
     owner_dsn: str,
     app_dsn: str,
-    app_password: str,
+    app_password: str | None = None,
     *,
     old_dsn: str | None = None,
+    resume_post_migration: bool = False,
+    staging_url: str | None = None,
+    expected_commit: str | None = None,
+    allow_staging_host: str | None = None,
+    allow_live_ai: bool = False,
     root: Path = ROOT,
 ) -> dict:
     import psycopg
     from psycopg import sql
     from psycopg.rows import dict_row
 
+    # Phase 0: Pre-flight target identity, TLS contract, and origin validation before connect/write.
     manifest = verify_migration_manifest(root)
+    target_identity = validate_cutover_database_urls(owner_dsn, app_dsn, old_dsn=old_dsn)
+    resolved_app_password = (
+        app_password or _parse_postgres_dsn(app_dsn, "app_database_url")["password"]
+    )
+    if not resolved_app_password:
+        raise ValueError(
+            "An application role password is required via app_password or app_database_url"
+        )
+    if staging_url:
+        validate_staging_origin(staging_url, allow_staging_host=allow_staging_host)
+        if not expected_commit:
+            raise ValueError("--expected-commit is required when --staging-url is provided")
+
+    # Phase 1: Optional read-only export of non-secret AI ledger from expiring staging database.
     exported_ledger = None
     if old_dsn:
         old_db = Database(old_dsn)
@@ -670,54 +1037,113 @@ def apply_postgres_cutover(
                 "attempts": [dict(r) for r in attempts],
             }
 
+    # Phase 2: Owner DDL transaction (or verified resume when --resume-post-migration is set).
     owner_options = Database(owner_dsn).connection_options
+    migration_transaction = "committed"
     with psycopg.connect(**owner_options, row_factory=dict_row) as conn:
-        existing = conn.execute(
-            "SELECT COUNT(*) AS count FROM information_schema.tables "
-            "WHERE table_schema = 'foodlogger'"
-        ).fetchone()["count"]
-        if existing != 0:
+        existing_rows = conn.execute(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = 'foodlogger' ORDER BY table_name"
+        ).fetchall()
+        existing_tables = [r["table_name"] for r in existing_rows]
+        existing = len(existing_tables)
+
+        if existing == 0:
+            if resume_post_migration:
+                raise RuntimeError(
+                    "--resume-post-migration was set, but schema foodlogger has 0 tables"
+                )
+            for rel_path, _ in MIGRATIONS:
+                conn.execute((root / rel_path).read_text(encoding="utf-8"))
+            conn.execute(
+                sql.SQL("ALTER ROLE foodlogger_app LOGIN PASSWORD {}").format(
+                    sql.Literal(resolved_app_password)
+                )
+            )
+        elif resume_post_migration and tuple(existing_tables) == EXPECTED_TABLES:
+            ver_row = conn.execute(
+                "SELECT version FROM foodlogger.schema_version WHERE id = 1"
+            ).fetchone()
+            servings_row = conn.execute(
+                "SELECT count(*) AS count FROM foodlogger.serving_conversions"
+            ).fetchone()
+            if not ver_row or ver_row["version"] != 2 or servings_row["count"] != 27:
+                raise RuntimeError(
+                    "Existing foodlogger schema does not match the completed 16-migration state"
+                )
+            conn.execute(
+                sql.SQL("ALTER ROLE foodlogger_app LOGIN PASSWORD {}").format(
+                    sql.Literal(resolved_app_password)
+                )
+            )
+            migration_transaction = "resumed_existing_16_migration_schema"
+        else:
             raise RuntimeError(
                 f"Target database already has {existing} tables in schema foodlogger; "
-                "refusing to overwrite non-empty database."
+                "refusing to overwrite non-empty database. Use --resume-post-migration only "
+                "when all 16 migrations (36 tables) were already committed."
             )
-        for rel_path, _ in MIGRATIONS:
-            conn.execute((root / rel_path).read_text(encoding="utf-8"))
-        conn.execute(
-            sql.SQL("ALTER ROLE foodlogger_app LOGIN PASSWORD {}").format(sql.Literal(app_password))
-        )
 
+    # Phase 3: Verify app_conn TLS, current_user/session_user, 0 owned tables, and 36 RLS tables
+    # BEFORE executing gateway.configure() or any app-connection write.
     app_database = Database(app_dsn)
+    with psycopg.connect(**app_database.connection_options, row_factory=dict_row) as app_conn:
+        posture = verify_app_connection_posture(app_conn)
+
+    # Phase 4: Schema check and idempotent AI policy renewal on verified app_database.
     app_database.check_schema()
     gateway = AIGateway(app_database, STAGING_PROJECT_ID, enabled=True)
     policy = build_staging_ai_policy()
     gateway.configure(policy)
 
-    with psycopg.connect(**app_database.connection_options, row_factory=dict_row) as app_conn:
-        role_row = app_conn.execute(ROLE_VERIFICATION_SQL).fetchone()
-        rls_rows = app_conn.execute(RLS_TABLES_VERIFICATION_SQL).fetchall()
-        tls_row = app_conn.execute(TLS_VERIFICATION_SQL).fetchone()
-
-    if not role_row or any(
-        role_row[k]
-        for k in ("rolsuper", "rolcreatedb", "rolcreaterole", "rolbypassrls", "rolinherit")
-    ):
-        raise AssertionError(f"foodlogger_app has unexpected privileges: {role_row}")
-    if [r["table_name"] for r in rls_rows] != list(EXPECTED_TABLES) or not all(
-        r["rls_enabled"] for r in rls_rows
-    ):
-        raise AssertionError("Not all 36 foodlogger tables have RLS enabled")
-    if not tls_row or not tls_row.get("ssl"):
-        raise AssertionError(f"TLS verification failed: {tls_row}")
+    # Phase 5: Optional hosted smoke verification against staging URL.
+    hosted_smoke = None
+    if staging_url:
+        hosted_smoke = run_hosted_smoke(
+            staging_url,
+            expected_commit=expected_commit or "",
+            allow_live_ai=allow_live_ai,
+            allow_staging_host=allow_staging_host,
+            root=root,
+        )
 
     return {
         "status": "passed",
+        "target_database": target_identity,
+        "migration_transaction": migration_transaction,
         "migrations_applied": len(manifest),
-        "tables_verified": len(rls_rows),
-        "app_role": dict(role_row),
-        "tls": dict(tls_row),
+        "tables_verified": len(posture["rls_tables"]),
+        "app_role": posture["app_role"],
+        "tls": posture["tls"],
         "ai_policy_verified_at": policy.verified_at.isoformat(),
         "exported_old_ledger": exported_ledger,
+        "hosted_smoke": hosted_smoke,
+    }
+
+
+def run_postgres_verify(app_dsn: str) -> dict:
+    """Run read-only PostgreSQL TLS, role, non-owner, and 36-table RLS verification on app_dsn."""
+    import psycopg
+    from psycopg.rows import dict_row
+
+    app_info = _parse_postgres_dsn(app_dsn, "app_database_url")
+    for forbidden in FORBIDDEN_PRODUCTION_IDENTIFIERS:
+        if forbidden in app_info["host"] or forbidden in app_dsn.lower():
+            raise ValueError(f"Refusing to run postgres-verify against production: {forbidden}")
+    if app_info["username"] != "foodlogger_app":
+        raise ValueError(
+            f"app_database_url must authenticate as 'foodlogger_app' (got {app_info['username']!r})"
+        )
+    app_database = Database(app_dsn)
+    with psycopg.connect(**app_database.connection_options, row_factory=dict_row) as app_conn:
+        posture = verify_app_connection_posture(app_conn)
+    app_database.check_schema()
+    return {
+        "status": "passed",
+        "mode": "postgres-verify",
+        "tables_verified": len(posture["rls_tables"]),
+        "app_role": posture["app_role"],
+        "tls": posture["tls"],
     }
 
 
@@ -725,10 +1151,22 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--mode",
-        choices=("local-verify", "cutover", "hosted-smoke"),
+        choices=("local-verify", "cutover", "postgres-verify", "hosted-smoke"),
         default="local-verify",
     )
-    parser.add_argument("--origin", default="https://biteflow-staging-api.onrender.com")
+    parser.add_argument(
+        "--origin",
+        "--staging-url",
+        dest="origin",
+        default="https://foodlogger-staging.onrender.com",
+    )
+    parser.add_argument("--allow-staging-host", default=None)
+    parser.add_argument("--expected-commit", default=None)
+    parser.add_argument("--admin-database-url", default=None)
+    parser.add_argument("--app-database-url", default=None)
+    parser.add_argument("--app-password", default=None)
+    parser.add_argument("--old-database-url", default=None)
+    parser.add_argument("--resume-post-migration", action="store_true")
     parser.add_argument("--allow-live-ai", action="store_true")
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args(argv)
@@ -736,16 +1174,42 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "local-verify":
         report = run_local_verification(ROOT)
     elif args.mode == "cutover":
-        owner_dsn = os.environ["STAGING_OWNER_DATABASE_URL"]
-        app_dsn = os.environ["STAGING_DATABASE_URL"]
-        app_password = os.environ["STAGING_APP_PASSWORD"]
-        old_dsn = os.getenv("OLD_STAGING_DATABASE_URL")
-        report = apply_postgres_cutover(
-            owner_dsn, app_dsn, app_password, old_dsn=old_dsn, root=ROOT
+        owner_dsn = (
+            args.admin_database_url
+            or os.getenv("STAGING_ADMIN_DATABASE_URL")
+            or os.environ["STAGING_OWNER_DATABASE_URL"]
         )
+        app_dsn = args.app_database_url or os.environ["STAGING_DATABASE_URL"]
+        app_password = args.app_password or os.getenv("STAGING_APP_PASSWORD")
+        old_dsn = args.old_database_url or os.getenv("OLD_STAGING_DATABASE_URL")
+        report = apply_postgres_cutover(
+            owner_dsn,
+            app_dsn,
+            app_password,
+            old_dsn=old_dsn,
+            resume_post_migration=args.resume_post_migration,
+            staging_url=args.origin if args.expected_commit else None,
+            expected_commit=args.expected_commit,
+            allow_staging_host=args.allow_staging_host,
+            allow_live_ai=args.allow_live_ai,
+            root=ROOT,
+        )
+    elif args.mode == "postgres-verify":
+        app_dsn = args.app_database_url or os.environ["STAGING_DATABASE_URL"]
+        report = run_postgres_verify(app_dsn)
     else:
-        with httpx.Client(base_url=args.origin, timeout=30.0, trust_env=False) as client:
-            report = run_smoke_against_client(client, check_ai=args.allow_live_ai)
+        expected_commit = (
+            args.expected_commit
+            or os.getenv("EXPECTED_COMMIT")
+            or verify_commit_and_nutrition_fixes(ROOT)["head_sha"]
+        )
+        report = run_hosted_smoke(
+            args.origin,
+            expected_commit=expected_commit or "",
+            allow_live_ai=args.allow_live_ai,
+            allow_staging_host=args.allow_staging_host,
+            root=ROOT,
+        )
 
     rendered = json.dumps(report, indent=2)
     if args.output:

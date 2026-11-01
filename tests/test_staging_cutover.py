@@ -1,8 +1,10 @@
 """Stage 0 regressions for render.yaml, 16-migration cutover, and staging smoke safety gates."""
 
 import importlib.util
+import py_compile
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -283,9 +285,19 @@ def test_cutover_rejects_bad_app_role_or_owned_tables_before_gateway_configure(
     assert configure_calls == []
 
 
-def test_cutover_resume_post_migration_succeeds_after_owner_migrations_committed(monkeypatch):
+@pytest.mark.parametrize("staging_url", [None, "https://foodlogger-staging.onrender.com"])
+def test_cutover_resume_post_migration_succeeds_after_owner_migrations_committed(
+    monkeypatch, staging_url
+):
     module = _load_cutover_module()
     configure_calls: list[object] = []
+    smoke_calls: list[str] = []
+
+    def _fake_hosted_smoke(origin, **kwargs):
+        smoke_calls.append(origin)
+        return {"status": "passed"}
+
+    monkeypatch.setattr(module, "run_hosted_smoke", _fake_hosted_smoke)
     monkeypatch.setattr(
         module.AIGateway,
         "configure",
@@ -381,11 +393,30 @@ def test_cutover_resume_post_migration_succeeds_after_owner_migrations_committed
         "apppass",
         resume_post_migration=True,
         expected_commit="4a9d6b6",
+        staging_url=staging_url,
         root=ROOT,
     )
-    assert report["status"] == "passed"
     assert report["migration_transaction"] == "resumed_existing_16_migration_schema"
     assert len(configure_calls) == 1
+    # A successful database phase must never read as full verification.
+    assert report["status"] != "passed"
+    if staging_url is None:
+        assert smoke_calls == []
+        assert report["status"] == "database_phase_passed"
+        assert report["scope"] == "database_phase_only"
+        assert report["end_to_end_verification"] == "pending"
+        assert report["hosted_smoke"]["status"] == "NOT_RUN"
+        assert "old database" in report["hosted_smoke"]["reason"]
+        assert [step.split(":")[0] for step in report["outstanding_steps"]] == [
+            "Step 2.2",
+            "Step 2.3",
+        ]
+    else:
+        assert smoke_calls == [staging_url]
+        assert report["status"] == "database_and_hosted_smoke_passed"
+        assert report["end_to_end_verification"] == "hosted_smoke_passed"
+        assert report["hosted_smoke"] == {"status": "passed"}
+        assert "cannot detect" in report["outstanding_steps"][0]
 
 
 def test_hosted_smoke_rejects_mismatched_commit_sha_before_any_writes(monkeypatch):
@@ -730,6 +761,42 @@ def test_fallback_tolerates_bytecode_caches(source_repo, tmp_path):
     assert report["ancestry_unverifiable"] == list(module.REQUIRED_NUTRITION_COMMITS)
 
 
+def test_cached_bytecode_cannot_replace_broken_committed_source(source_repo, tmp_path):
+    module = _load_cutover_module()
+    working_source = source_repo / NUTRITION_FILE
+    working_copy = tmp_path / "working_nutrition_reference.py"
+    working_copy.write_bytes(working_source.read_bytes())
+    _commit_file(source_repo, ".gitignore", "__pycache__/\n")
+    _commit_file(source_repo, NUTRITION_FILE, 'raise RuntimeError("fixture broken catalog")\n')
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+    target = clone / NUTRITION_FILE
+    cache = Path(importlib.util.cache_from_source(str(target)))
+    cache.parent.mkdir(exist_ok=True)
+    py_compile.compile(
+        str(working_copy),
+        cfile=str(cache),
+        doraise=True,
+        invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH,
+    )
+
+    # Control: without an isolated cache location this .pyc does replace the broken source.
+    plain_import = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-B",
+            "-c",
+            "import sys; sys.path.insert(0, sys.argv[1]); import foodlogger.nutrition_reference",
+            str(clone / "src"),
+        ],
+        capture_output=True,
+    )
+    assert plain_import.returncode == 0
+
+    with pytest.raises(AssertionError, match="fixture broken catalog"):
+        module.verify_commit_and_nutrition_fixes(clone, allow_behavioral_fallback=True)
+
+
 def test_local_verification_rejects_a_root_other_than_the_imported_checkout(source_repo):
     module = _load_cutover_module()
     with pytest.raises(AssertionError, match="different checkout"):
@@ -920,6 +987,35 @@ def test_cutover_with_proven_ancestry_reaches_the_owner_connection(
             root=source_repo,
         )
     assert len(connections) == 1
+
+
+def test_cli_cutover_exits_zero_but_names_outstanding_steps(monkeypatch, capsys):
+    module = _load_cutover_module()
+    monkeypatch.setattr(
+        module,
+        "apply_postgres_cutover",
+        lambda *args, **kwargs: {
+            "status": "database_phase_passed",
+            "outstanding_steps": ["Step 2.2: fixture", "Step 2.3: fixture"],
+        },
+    )
+    exit_code = module.main(
+        [
+            "--mode",
+            "cutover",
+            "--admin-database-url",
+            OWNER_DSN,
+            "--app-database-url",
+            APP_DSN,
+            "--expected-commit",
+            "4a9d6b6",
+        ]
+    )
+    assert exit_code == 0
+    stderr = capsys.readouterr().err
+    assert "database_phase_passed. Still outstanding:" in stderr
+    assert "- Step 2.2: fixture" in stderr
+    assert "- Step 2.3: fixture" in stderr
 
 
 @pytest.mark.parametrize(

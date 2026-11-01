@@ -57,6 +57,8 @@ $env:PYTHONUTF8 = "1"; & "C:\Users\braud\AppData\Local\Programs\Python\Python312
 
 `--mode cutover` does not run the hosted smoke by default, because staging still uses the old database at this point (Step 2.2 moves it). Add `--run-hosted-smoke` only on a re-run after staging already uses the replacement database; otherwise run Step 2.3 separately.
 
+A successful default run exits `0` and reports `status: database_phase_passed`, `scope: database_phase_only`, `end_to_end_verification: pending`, `hosted_smoke.status: NOT_RUN` with the reason, and `outstanding_steps` naming Steps 2.2 and 2.3. **The cutover is not finished until both are done.** With `--run-hosted-smoke`, it reports `status: database_and_hosted_smoke_passed`.
+
 #### Transaction & Retry Boundaries in `--mode cutover`
 
 `apply_postgres_cutover` executes in four explicit phases so that no application write ever occurs on an unverified connection and post-migration checks can be safely retried:
@@ -90,7 +92,7 @@ Update `DATABASE_URL` on Render staging service (`srv-d6q78f450q8c73f3376g` / `s
 
 ### Step 2.3 — 1-Command Hosted Staging Smoke + Commit SHA Check + Bounded Synthetic AI Probe
 
-`--mode hosted-smoke` validates the HTTPS staging hostname, requires proven ancestry before opening any connection, checks `/api/health` and verifies the deployed commit SHA matches or descends from `--expected-commit` **before** registering synthetic accounts or writing data, and then runs the 21-check smoke suite (22 checks including `deployed commit sha`):
+`--mode hosted-smoke` validates the HTTPS staging hostname, requires proven ancestry before opening any connection, checks `/api/health` and verifies the deployed commit SHA matches or descends from `--expected-commit` **before** registering synthetic accounts or writing data, and then runs the 21-check smoke suite (22 checks including `deployed commit sha`). `/api/health` does not identify the database in use, so the smoke cannot prove staging moved: confirm the `DATABASE_URL` from Step 2.2 on Render before running it.
 
 ```powershell
 $env:PYTHONUTF8 = "1"; & "C:\Users\braud\AppData\Local\Programs\Python\Python312\python.exe" scripts/staging_db_cutover.py --mode hosted-smoke --origin https://foodlogger-staging.onrender.com --expected-commit $(git rev-parse HEAD) --allow-live-ai --output runtime/staging-cutover-2026-11/hosted-smoke-evidence.json
@@ -100,5 +102,6 @@ $env:PYTHONUTF8 = "1"; & "C:\Users\braud\AppData\Local\Programs\Python\Python312
 
 ## 3. Rollback Notes
 
-- If any migration, role/RLS/TLS check, or hosted smoke check fails on the new staging database, keep staging pointed at the existing `dpg-d6q76n5m5p6s73f9k58g-a` database (valid until `2026-11-19 07:58 UTC`).
+- **Failure before Step 2.2** (any migration or role/RLS/TLS check): staging has not moved. Leave it on the existing `dpg-d6q76n5m5p6s73f9k58g-a` database (valid until `2026-11-19 07:58 UTC`).
+- **Failure after Step 2.2** (hosted smoke or a later check): staging already uses the replacement database. Restore the staging `DATABASE_URL` on Render to the previous value (`OLD_STAGING_DATABASE_URL`), redeploy, and confirm `/api/health` responds. This rollback has not been rehearsed against a live service. It only works until the old database expires at `2026-11-19 07:58 UTC`.
 - Do not delete or drop the old staging database until QA & Security Engineer and Project Lead verify the cutover evidence.

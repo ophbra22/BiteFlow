@@ -686,20 +686,25 @@ def verify_nutrition_fix_behavior(root: Path, commits: list[str]) -> dict[str, i
     """Run each commit's catalog contract against root's own code and catalog data."""
     package = (root / "src" / "foodlogger").resolve()
     cases = [(commit, *case) for commit in commits for case in NUTRITION_FIX_CONTRACTS[commit]]
-    run = subprocess.run(
-        [
-            sys.executable,
-            "-I",
-            "-B",
-            "-c",
-            CATALOG_CONTRACT_RUNNER,
-            str(package),
-            json.dumps([[query, preparation] for _, query, preparation, _, _ in cases]),
-        ],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    # An empty cache location makes Python compile the verified source: a tolerated
+    # __pycache__ entry in the target could otherwise supply different code under the same path.
+    with tempfile.TemporaryDirectory(prefix="biteflow-contract-cache-") as empty_cache:
+        run = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-B",
+                "-X",
+                f"pycache_prefix={empty_cache}",
+                "-c",
+                CATALOG_CONTRACT_RUNNER,
+                str(package),
+                json.dumps([[query, preparation] for _, query, preparation, _, _ in cases]),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
     if run.returncode != 0:
         raise AssertionError(
             f"Catalog contract run failed against {package}: {run.stderr[-500:].strip()}"
@@ -1342,8 +1347,36 @@ def apply_postgres_cutover(
             root=root,
         )
 
+    if hosted_smoke is None:
+        scope = {
+            "status": "database_phase_passed",
+            "scope": "database_phase_only",
+            "end_to_end_verification": "pending",
+            "hosted_smoke": {
+                "status": "NOT_RUN",
+                "reason": (
+                    "Staging still uses the old database until Step 2.2, and the smoke must not "
+                    "write to it. --run-hosted-smoke was not set."
+                ),
+            },
+            "outstanding_steps": [
+                "Step 2.2: point staging DATABASE_URL at the replacement database and deploy",
+                "Step 2.3: run --mode hosted-smoke against staging",
+            ],
+        }
+    else:
+        scope = {
+            "status": "database_and_hosted_smoke_passed",
+            "scope": "database_phase_and_hosted_smoke",
+            "end_to_end_verification": "hosted_smoke_passed",
+            "hosted_smoke": hosted_smoke,
+            "outstanding_steps": [
+                "Confirm staging DATABASE_URL uses the replacement database: "
+                "the hosted smoke cannot detect which database staging uses",
+            ],
+        }
     return {
-        "status": "passed",
+        **scope,
         "target_database": target_identity,
         "migration_transaction": migration_transaction,
         "migrations_applied": len(manifest),
@@ -1352,7 +1385,6 @@ def apply_postgres_cutover(
         "tls": posture["tls"],
         "ai_policy_verified_at": policy.verified_at.isoformat(),
         "exported_old_ledger": exported_ledger,
-        "hosted_smoke": hosted_smoke,
     }
 
 
@@ -1456,6 +1488,13 @@ def main(argv: list[str] | None = None) -> int:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(rendered + "\n", encoding="utf-8")
     print(rendered)
+    if report.get("outstanding_steps"):
+        print(
+            f"{report['status']}. Still outstanding:",
+            *report["outstanding_steps"],
+            sep="\n- ",
+            file=sys.stderr,
+        )
     return 0
 
 

@@ -1,18 +1,19 @@
-# Staging Database Cutover & Smoke Runbook (Before 2026-11-19)
+# Staging Database Cutover & Smoke Runbook (Recorded Deadline 2026-11-19, Confirm on Render)
 
 ## Scope & Safety Rules
 
-- **Target environment:** Staging only (`foodlogger-staging` / `srv-d6q78f450q8c73f3376g` at `https://foodlogger-staging.onrender.com`, or blueprint alias `biteflow-staging-api` / `srv-dbbiamm1egvs7384stu0` at `https://biteflow-staging-api.onrender.com`).
-- **Expiring database:** `dpg-d6q76n5m5p6s73f9k58g-a` (`dpg-dbbhudvavr4c73duk09g-a`, PostgreSQL 17 Free, Frankfurt), expires **2026-11-19 07:58 UTC**.
+- **Target environment:** Staging only (`biteflow-staging-api` / `srv-dbbiamm1egvs7384stu0` at `https://biteflow-staging-api.onrender.com`).
+- **Recorded staging database:** `biteflow-staging-db` (`dpg-dbbhudvavr4c73duk09g-a`, PostgreSQL 17 Free, Frankfurt). `docs/biteflow/release-readiness/testflight-rc12-15.md` records it as expiring **2026-11-19 07:58 UTC**, observed on 2026-10-20. **The repository cannot show that this is still the active database or that the date is still correct. Treat the rollback target and its expiry as unverified until Step 2.0 is done.**
+- **Unverified identifiers:** earlier revisions of this runbook named `dpg-d6q76n5m5p6s73f9k58g-a`, `srv-d6q78f450q8c73f3376g`, `srv-d6q76n5m5p6s73f9k590`, and `foodlogger-staging.onrender.com`. The repository has no evidence for them, and no expiry date for that database. Do not use them to act on a service or database without confirming them on Render. The script refuses `dpg-d6q76n5m5p6s73f9k58g-a` as both the old and the replacement database, and needs `--allow-staging-host` for that host.
 - **Pre-flight safety gates enforced before any network write:**
-  - `hosted-smoke` and `cutover` validate `--origin` / `--staging-url` before sending any HTTP request: `https://` is required, the hostname must match an approved staging host (`foodlogger-staging.onrender.com` or `biteflow-staging-api.onrender.com`, or an explicit `--allow-staging-host` override), and any production identifier (`foodlogger.onrender.com`, `srv-d6q76n5m5p6s73f9k590`, `srv-db3raa3ncjis73bh20p0`, `slnmporlcbqnnkyebdmv`, `supabase.co`, `car_log`) is unconditionally rejected.
-  - `cutover` validates `--admin-database-url` and `--app-database-url` before connecting: both must target the exact same replacement `(host, port, dbname)`, authenticate as distinct roles (`admin_user != 'foodlogger_app'` and `app_user == 'foodlogger_app'`), and neither may match the expiring staging DB (`dpg-d6q76n5m5p6s73f9k58g-a` / `dpg-dbbhudvavr4c73duk09g-a`) or any production database.
+  - `hosted-smoke` and `cutover` validate `--origin` / `--staging-url` before sending any HTTP request: `https://` is required, the hostname must match the approved staging host (`biteflow-staging-api.onrender.com`, or an explicit `--allow-staging-host` override), and any production identifier (`foodlogger.onrender.com`, `srv-db3raa3ncjis73bh20p0`, `slnmporlcbqnnkyebdmv`, `supabase.co`, `car_log`, plus the unverified `srv-d6q76n5m5p6s73f9k590` as a precaution) is unconditionally rejected.
+  - `cutover` validates `--admin-database-url` and `--app-database-url` before connecting: both must target the exact same replacement `(host, port, dbname)`, authenticate as distinct roles (`admin_user != 'foodlogger_app'` and `app_user == 'foodlogger_app'`), and neither may match the recorded staging DB (`dpg-dbbhudvavr4c73duk09g-a`), the unverified `dpg-d6q76n5m5p6s73f9k58g-a`, or any production database.
   - `hosted-smoke` and `cutover` require **proven git ancestry** of `089f789`, `3658a17`, and `4a9d6b6` before any connection, HTTP request, or write. Run them from a checkout with full history (`git fetch --unshallow`). A shallow checkout that cannot prove ancestry is rejected; the catalog fallback below never applies to them.
   - `cutover` always requires `--expected-commit` (or `EXPECTED_COMMIT`), which must be the checked-out `HEAD`, because that checkout supplies the migrations. `hosted-smoke` requires an expected commit too and defaults to `HEAD` only when ancestry is proven.
   - The commit that `/api/health` reports must be present in the local checkout. If staging runs a newer commit, `git fetch` first.
 - **Production boundaries (Hard Limits):**
   - Never modify or run migrations against the shared production Supabase project (`slnmporlcbqnnkyebdmv` / `car_log`).
-  - Never trigger a production deploy on `foodlogger` (`srv-d6q76n5m5p6s73f9k590` / `srv-db3raa3ncjis73bh20p0`). `render.yaml` sets `autoDeployTrigger: 'off'`.
+  - Never trigger a production deploy on `foodlogger` (`srv-db3raa3ncjis73bh20p0`). `render.yaml` sets `autoDeployTrigger: 'off'`.
   - Keep the old staging database and its `ai_attempts` / `ai_projects` ledger intact until the replacement is verified and Project Lead approves removal.
   - Never place connection strings, passwords, tokens, or API keys in committed files or chat.
 
@@ -40,11 +41,25 @@ $env:PYTHONUTF8 = "1"; & "C:\Users\braud\AppData\Local\Programs\Python\Python312
 
 Full PostgreSQL catalog, RLS, role privilege, table ownership, and live TLS verification run in `--mode cutover` (and read-only in `--mode postgres-verify`).
 
+### Step 2.0 — Confirm the Active Database and Its Expiry on Render (Required Before Step 2.1)
+
+On the Render dashboard, or with a read-only API call, confirm these for staging service `biteflow-staging-api` (`srv-dbbiamm1egvs7384stu0`):
+
+1. Which database its `DATABASE_URL` points to now, by database ID.
+2. The expiry date Render shows for that database. This is the real cutover and rollback deadline.
+
+Record the ID and date in the cutover evidence, never the connection string.
+
+- **If the active database is `dpg-dbbhudvavr4c73duk09g-a`:** continue, using the date Render shows.
+- **If it is any other database:** stop and report it to Project Lead. The recorded deadline and rollback target in this runbook do not apply, and the script rejects that database as `OLD_STAGING_DATABASE_URL` until its ID is reviewed and added to `EXPIRING_STAGING_DB_IDS` in a PR.
+
+This step has not been run. It needs Render access.
+
 ### Prerequisites (Environment Variables Only)
 
 Set the following in your local shell session (never commit or echo values):
 
-- `OLD_STAGING_DATABASE_URL`: Existing `foodlogger_app` PostgreSQL URL on `dpg-d6q76n5m5p6s73f9k58g-a` (optional; used for read-only export of non-secret AI ledger evidence before cutover).
+- `OLD_STAGING_DATABASE_URL`: Existing `foodlogger_app` PostgreSQL URL on the active database confirmed in Step 2.0 (optional; used for read-only export of non-secret AI ledger evidence before cutover).
 - `STAGING_ADMIN_DATABASE_URL` (or `STAGING_OWNER_DATABASE_URL`): Database owner PostgreSQL URL for the new free Frankfurt PostgreSQL 17 instance (`?sslmode=verify-full`).
 - `STAGING_APP_PASSWORD`: Strong random password generated for the dedicated `foodlogger_app` role on the new database (optional if embedded in `STAGING_DATABASE_URL`).
 - `STAGING_DATABASE_URL`: Dedicated `foodlogger_app` PostgreSQL URL targeting the exact same `(host, port, dbname)` as `STAGING_ADMIN_DATABASE_URL` (`postgresql://foodlogger_app:<PASSWORD>@<HOST>/<DB>?sslmode=verify-full`).
@@ -88,20 +103,21 @@ $env:PYTHONUTF8 = "1"; & "C:\Users\braud\AppData\Local\Programs\Python\Python312
 
 ### Step 2.2 — Point Staging Render Service to New `DATABASE_URL` & Deploy `HEAD` (`4a9d6b6`+)
 
-Update `DATABASE_URL` on Render staging service (`srv-d6q78f450q8c73f3376g` / `srv-dbbiamm1egvs7384stu0`) to the new `foodlogger_app` connection string (`sslmode=verify-full`) and deploy `codex/biteflow-testflight-rc12-15` HEAD (which includes `089f789`, `3658a17`, `4a9d6b6`). Confirm production service `foodlogger` (`srv-d6q76n5m5p6s73f9k590` / `srv-db3raa3ncjis73bh20p0`) has `autoDeploy: no` and did not redeploy.
+Update `DATABASE_URL` on Render staging service `biteflow-staging-api` (`srv-dbbiamm1egvs7384stu0`) to the new `foodlogger_app` connection string (`sslmode=verify-full`) and deploy `codex/biteflow-testflight-rc12-15` HEAD (which includes `089f789`, `3658a17`, `4a9d6b6`). Confirm production service `foodlogger` (`srv-db3raa3ncjis73bh20p0`) has `autoDeploy: no` and did not redeploy.
 
 ### Step 2.3 — 1-Command Hosted Staging Smoke + Commit SHA Check + Bounded Synthetic AI Probe
 
 `--mode hosted-smoke` validates the HTTPS staging hostname, requires proven ancestry before opening any connection, checks `/api/health` and verifies the deployed commit SHA matches or descends from `--expected-commit` **before** registering synthetic accounts or writing data, and then runs the 21-check smoke suite (22 checks including `deployed commit sha`). `/api/health` does not identify the database in use, so the smoke cannot prove staging moved: confirm the `DATABASE_URL` from Step 2.2 on Render before running it.
 
 ```powershell
-$env:PYTHONUTF8 = "1"; & "C:\Users\braud\AppData\Local\Programs\Python\Python312\python.exe" scripts/staging_db_cutover.py --mode hosted-smoke --origin https://foodlogger-staging.onrender.com --expected-commit $(git rev-parse HEAD) --allow-live-ai --output runtime/staging-cutover-2026-11/hosted-smoke-evidence.json
+$env:PYTHONUTF8 = "1"; & "C:\Users\braud\AppData\Local\Programs\Python\Python312\python.exe" scripts/staging_db_cutover.py --mode hosted-smoke --origin https://biteflow-staging-api.onrender.com --expected-commit $(git rev-parse HEAD) --allow-live-ai --output runtime/staging-cutover-2026-11/hosted-smoke-evidence.json
 ```
 
 ---
 
 ## 3. Rollback Notes
 
-- **Failure before Step 2.2** (any migration or role/RLS/TLS check): staging has not moved. Leave it on the existing `dpg-d6q76n5m5p6s73f9k58g-a` database (valid until `2026-11-19 07:58 UTC`).
-- **Failure after Step 2.2** (hosted smoke or a later check): staging already uses the replacement database. Restore the staging `DATABASE_URL` on Render to the previous value (`OLD_STAGING_DATABASE_URL`), redeploy, and confirm `/api/health` responds. This rollback has not been rehearsed against a live service. It only works until the old database expires at `2026-11-19 07:58 UTC`.
+- **Rollback target:** the database confirmed in Step 2.0. Until that step is done, the target and its expiry are unverified, so this runbook promises no rollback window.
+- **Failure before Step 2.2** (any migration or role/RLS/TLS check): staging has not moved. Leave it on the database confirmed in Step 2.0.
+- **Failure after Step 2.2** (hosted smoke or a later check): staging already uses the replacement database. Restore the staging `DATABASE_URL` on Render to the previous value (`OLD_STAGING_DATABASE_URL`), redeploy, and confirm `/api/health` responds. This rollback has not been rehearsed against a live service. It only works until the expiry date recorded in Step 2.0.
 - Do not delete or drop the old staging database until QA & Security Engineer and Project Lead verify the cutover evidence.

@@ -68,13 +68,13 @@ def test_local_verification_covers_health_commits_tls_role_and_synthetic_ai():
 @pytest.mark.parametrize(
     "bad_origin",
     [
-        "http://foodlogger-staging.onrender.com",
         "http://biteflow-staging-api.onrender.com",
+        "https://foodlogger-staging.onrender.com",  # no repository evidence for this host
         "https://foodlogger.onrender.com",
         "https://srv-d6q76n5m5p6s73f9k590.onrender.com",
         "https://slnmporlcbqnnkyebdmv.supabase.co",
         "https://evil.example.com",
-        "https://user:pass@foodlogger-staging.onrender.com",
+        "https://user:pass@biteflow-staging-api.onrender.com",
     ],
 )
 def test_hosted_smoke_rejects_http_or_non_staging_origin_before_any_request(bad_origin):
@@ -130,9 +130,14 @@ def test_hosted_smoke_rejects_http_or_non_staging_origin_before_any_request(bad_
             "foodlogger_app",
         ),
         (
+            "postgresql://owner:pw@dpg-dbbhudvavr4c73duk09g-a.frankfurt-postgres.render.com/biteflow_staging_db",
+            "postgresql://foodlogger_app:pw@dpg-dbbhudvavr4c73duk09g-a.frankfurt-postgres.render.com/biteflow_staging_db",
+            "expiring staging database",
+        ),
+        (
             "postgresql://owner:pw@dpg-d6q76n5m5p6s73f9k58g-a.frankfurt-postgres.render.com/biteflow_staging_db",
             "postgresql://foodlogger_app:pw@dpg-d6q76n5m5p6s73f9k58g-a.frankfurt-postgres.render.com/biteflow_staging_db",
-            "expiring staging database",
+            "unverified database",
         ),
         (
             "postgresql://owner:pw@db.slnmporlcbqnnkyebdmv.supabase.co:5432/postgres",
@@ -285,7 +290,7 @@ def test_cutover_rejects_bad_app_role_or_owned_tables_before_gateway_configure(
     assert configure_calls == []
 
 
-@pytest.mark.parametrize("staging_url", [None, "https://foodlogger-staging.onrender.com"])
+@pytest.mark.parametrize("staging_url", [None, "https://biteflow-staging-api.onrender.com"])
 def test_cutover_resume_post_migration_succeeds_after_owner_migrations_committed(
     monkeypatch, staging_url
 ):
@@ -432,7 +437,7 @@ def test_hosted_smoke_rejects_mismatched_commit_sha_before_any_writes(monkeypatc
             return {"status": "ok", "version": "2.1.0", "commit": "deadbeef1234567"}
 
     class _FakeStagingClient:
-        base_url = "https://foodlogger-staging.onrender.com"
+        base_url = "https://biteflow-staging-api.onrender.com"
 
         def get(self, path, **kwargs):
             requests_sent.append(f"GET {path}")
@@ -446,7 +451,7 @@ def test_hosted_smoke_rejects_mismatched_commit_sha_before_any_writes(monkeypatc
 
     with pytest.raises(AssertionError, match="Deployed commit SHA mismatch"):
         module.run_hosted_smoke(
-            "https://foodlogger-staging.onrender.com",
+            "https://biteflow-staging-api.onrender.com",
             expected_commit="4a9d6b60c9304254136dd1eb7fb15f0b57968155",
             client=_FakeStagingClient(),
         )
@@ -486,7 +491,7 @@ def test_parse_postgres_dsn_rejects_query_parameter_overrides(query_override):
             "forbidden production identifier",
         ),
         (
-            "postgresql://foodlogger_app:pw@dpg-d6q76n5m5p6s73f9k58g-a.frankfurt-postgres.render.com/car_log",
+            "postgresql://foodlogger_app:pw@dpg-dbbhudvavr4c73duk09g-a.frankfurt-postgres.render.com/car_log",
             "forbidden production identifier",
         ),
         (
@@ -494,12 +499,16 @@ def test_parse_postgres_dsn_rejects_query_parameter_overrides(query_override):
             "does not match expected expiring staging database",
         ),
         (
-            "postgresql://foodlogger_app:pw@dpg-d6q76n5m5p6s73f9k58g-a."
+            "postgresql://foodlogger_app:pw@dpg-d6q76n5m5p6s73f9k58g-a.frankfurt-postgres.render.com/biteflow_staging_db",
+            "does not match expected expiring staging database",
+        ),
+        (
+            "postgresql://foodlogger_app:pw@dpg-dbbhudvavr4c73duk09g-a."
             "frankfurt-postgres.render.com.unapproved.invalid/biteflow_staging_db",
             "does not match expected expiring staging database",
         ),
         (
-            "postgresql://foodlogger_app:pw@evil-dpg-d6q76n5m5p6s73f9k58g-a."
+            "postgresql://foodlogger_app:pw@evil-dpg-dbbhudvavr4c73duk09g-a."
             "frankfurt-postgres.render.com/biteflow_staging_db",
             "does not match expected expiring staging database",
         ),
@@ -521,11 +530,34 @@ def test_validate_cutover_database_urls_enforces_production_and_legacy_checks_on
         module.validate_cutover_database_urls(owner_dsn, app_dsn, old_dsn=bad_old_dsn)
 
     valid_old_dsn = (
-        "postgresql://foodlogger_app:pw@dpg-d6q76n5m5p6s73f9k58g-a.frankfurt-postgres.render.com:5432/"
+        "postgresql://foodlogger_app:pw@dpg-dbbhudvavr4c73duk09g-a.frankfurt-postgres.render.com:5432/"
         "biteflow_staging_db?sslmode=verify-full"
     )
     validated = module.validate_cutover_database_urls(owner_dsn, app_dsn, old_dsn=valid_old_dsn)
     assert validated["host"] == "dpg-replacement-a.frankfurt-postgres.render.com"
+
+
+def test_staging_identity_matches_the_release_readiness_record():
+    module = _load_cutover_module()
+    record = (ROOT / "docs/biteflow/release-readiness/testflight-rc12-15.md").read_text(
+        encoding="utf-8"
+    )
+    for db_id in module.EXPIRING_STAGING_DB_IDS:
+        assert db_id in record
+    for db_id in module.UNVERIFIED_STAGING_DB_IDS:
+        assert db_id not in record
+    assert module.DEFAULT_STAGING_ORIGIN in record
+    assert module.validate_staging_origin(module.DEFAULT_STAGING_ORIGIN)
+
+
+def test_unlisted_staging_host_needs_the_explicit_override():
+    module = _load_cutover_module()
+    origin = "https://foodlogger-staging.onrender.com"
+    with pytest.raises(ValueError, match="Unapproved staging host"):
+        module.validate_staging_origin(origin)
+    assert module.validate_staging_origin(
+        origin, allow_staging_host="foodlogger-staging.onrender.com"
+    )
 
 
 def test_parse_postgres_dsn_unquotes_percent_encoded_password():
@@ -570,7 +602,7 @@ def test_fastapi_health_endpoint_reports_render_git_commit(tmp_path, monkeypatch
 
 GIT = shutil.which("git") or r"C:\Program Files\Git\cmd\git.exe"
 NUTRITION_FILE = "src/foodlogger/nutrition_reference.py"
-STAGING_ORIGIN = "https://foodlogger-staging.onrender.com"
+STAGING_ORIGIN = "https://biteflow-staging-api.onrender.com"
 OWNER_DSN = (
     "postgresql://owner:ownerpass@dpg-replacement-a.frankfurt-postgres.render.com:5432/"
     "biteflow_staging_db"
@@ -579,7 +611,7 @@ APP_DSN = (
     "postgresql://foodlogger_app:apppass@dpg-replacement-a.frankfurt-postgres.render.com:5432/"
     "biteflow_staging_db"
 )
-OLD_DSN = "postgresql://foodlogger_app:oldpass@dpg-d6q76n5m5p6s73f9k58g-a/foodlogger"
+OLD_DSN = "postgresql://foodlogger_app:oldpass@dpg-dbbhudvavr4c73duk09g-a/foodlogger"
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -1020,7 +1052,7 @@ def test_cli_cutover_exits_zero_but_names_outstanding_steps(monkeypatch, capsys)
 
 @pytest.mark.parametrize(
     "extra,staging_url",
-    [([], None), (["--run-hosted-smoke"], "https://foodlogger-staging.onrender.com")],
+    [([], None), (["--run-hosted-smoke"], "https://biteflow-staging-api.onrender.com")],
 )
 def test_cli_cutover_runs_hosted_smoke_only_when_asked(monkeypatch, extra, staging_url):
     module = _load_cutover_module()

@@ -1,7 +1,7 @@
 """Staging DB cutover, 16-migration verification, and hosted/local smoke harness.
 
 Covers Stage 0 (T0.1 render.yaml check, T0.2 staging smoke + AI policy renewal,
-and T0.3 staging PostgreSQL 16-migration cutover before 2026-11-19).
+and T0.3 staging PostgreSQL 16-migration cutover; confirm the database expiry on Render).
 Never logs or persists connection strings, passwords, tokens, or API keys.
 """
 
@@ -188,22 +188,16 @@ used.append(str(files("foodlogger").joinpath("data/usda_reference.json")))
 print(json.dumps({"results": results, "used": used}))
 """
 STAGING_PROJECT_ID = "gen-lang-client-0101662511"
-STAGING_SERVICE_IDS: tuple[str, ...] = (
-    "srv-d6q78f450q8c73f3376g",
-    "srv-dbbiamm1egvs7384stu0",
-)
-PRODUCTION_SERVICE_IDS: tuple[str, ...] = (
-    "srv-d6q76n5m5p6s73f9k590",
-    "srv-db3raa3ncjis73bh20p0",
-)
-EXPIRING_STAGING_DB_IDS: tuple[str, ...] = (
-    "dpg-d6q76n5m5p6s73f9k58g-a",
-    "dpg-dbbhudvavr4c73duk09g-a",
-)
-APPROVED_STAGING_HOSTS: tuple[str, ...] = (
-    "foodlogger-staging.onrender.com",
-    "biteflow-staging-api.onrender.com",
-)
+DEFAULT_STAGING_ORIGIN = "https://biteflow-staging-api.onrender.com"
+# Recorded in docs/biteflow/release-readiness/testflight-rc12-15.md. Whether this is still the
+# active staging database must be confirmed on Render (runbook Step 2.0).
+EXPIRING_STAGING_DB_IDS: tuple[str, ...] = ("dpg-dbbhudvavr4c73duk09g-a",)
+# No repository evidence ties this ID to staging or to an expiry date. It is never accepted as
+# the old database, and is refused as a replacement target in case it is in use.
+UNVERIFIED_STAGING_DB_IDS: tuple[str, ...] = ("dpg-d6q76n5m5p6s73f9k58g-a",)
+APPROVED_STAGING_HOSTS: tuple[str, ...] = ("biteflow-staging-api.onrender.com",)
+# Refused everywhere. srv-d6q76n5m5p6s73f9k590 has no repository evidence, and stays blocked only
+# as a precaution; the production service recorded in the repository is srv-db3raa3ncjis73bh20p0.
 FORBIDDEN_PRODUCTION_IDENTIFIERS: tuple[str, ...] = (
     "foodlogger.onrender.com",
     "srv-d6q76n5m5p6s73f9k590",
@@ -412,6 +406,12 @@ def validate_cutover_database_urls(
                     f"{label} points to expiring staging database {old_id!r}; "
                     "cutover requires a replacement staging database"
                 )
+        for unverified_id in UNVERIFIED_STAGING_DB_IDS:
+            if unverified_id in info["host"] or unverified_id in lowered:
+                raise ValueError(
+                    f"{label} points to unverified database {unverified_id!r}; "
+                    "cutover requires a newly created replacement staging database"
+                )
 
     owner_target = (owner_info["host"], owner_info["port"], owner_info["dbname"])
     app_target = (app_info["host"], app_info["port"], app_info["dbname"])
@@ -453,7 +453,8 @@ def validate_cutover_database_urls(
         if not valid_old_host:
             raise ValueError(
                 f"old_database_url host {old_info['host']!r} does not match expected expiring "
-                f"staging database identifiers {list(EXPIRING_STAGING_DB_IDS)}"
+                f"staging database identifiers {list(EXPIRING_STAGING_DB_IDS)}. If Render shows "
+                "a different active database, stop and report it (runbook Step 2.0)."
             )
 
     return {
@@ -1427,7 +1428,7 @@ def main(argv: list[str] | None = None) -> int:
         "--origin",
         "--staging-url",
         dest="origin",
-        default="https://foodlogger-staging.onrender.com",
+        default=DEFAULT_STAGING_ORIGIN,
     )
     parser.add_argument("--allow-staging-host", default=None)
     parser.add_argument("--expected-commit", default=None)

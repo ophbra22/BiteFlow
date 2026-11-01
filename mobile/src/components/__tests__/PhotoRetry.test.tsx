@@ -10,7 +10,7 @@ jest.mock('@/data/DraftProvider',()=>({useDraft:()=>({start:mockStart,newKey:moc
 jest.mock('expo-router',()=>({router:{replace:jest.fn()},useLocalSearchParams:()=>({source:'library'})}));
 jest.mock('expo-image-picker',()=>({launchImageLibraryAsync:async()=>({canceled:false,assets:[{uri:'file:///mock.jpg'}]})}));
 jest.mock('@/data/images',()=>({prepareUpload:async()=>({uri:'file:///mock-upload.jpg',dispose:jest.fn()})}));
-jest.mock('../Screen',()=>({Screen:({children}:any)=>children}));
+jest.mock('../Screen',()=>({Screen:({children,footer}:any)=><>{children}{footer}</>}));
 jest.mock('../Header',()=>({Header:()=>null}));
 beforeEach(()=>{jest.useFakeTimers();jest.clearAllMocks();mockSequence=0;mockAnalyze.mockRejectedValue(new ApiError('unavailable',{status:503,detail:'Analysis was already attempted. Reuse its cached result or start a new request.'}));});
 afterEach(()=>jest.useRealTimers());

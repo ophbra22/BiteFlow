@@ -25,6 +25,7 @@ test('saved meal uses shared editor, locks uncertain PATCH and retry preserves r
  const amount=await screen.findByTestId('food-weight-ingredient');
  await fireEvent.changeText(amount,'200');
  await fireEvent.press(screen.getByTestId('confirm-ingredient'));
+ await fireEvent.press(screen.getByTestId('exact-time'));
  await fireEvent.changeText(screen.getByLabelText('Meal time (optional)'),'2026-10-13T12:30:00+03:00');
  await fireEvent.changeText(screen.getByLabelText('Time zone (optional)'),'Asia/Jerusalem');
  await fireEvent.press(screen.getByTestId('save-analyzed-meal'));

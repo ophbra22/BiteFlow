@@ -20,12 +20,12 @@ function Selector({food,onChange,disabled,load}:Props) {
  const original=food.originalPortion;
  const unit=(value:string)=>t((['cup','tablespoon','teaspoon','slice','piece','half','small','medium','large','serving'].includes(value)?`servings.units.${value}`:'servings.units.other') as TKey);
  const confidence=(value:string)=>t(value==='source_reported'?'servings.confidence.source_reported':value==='derived'?'servings.confidence.derived':'servings.confidence.unknown');
- return <View>
-  <Button label={t('servings.title')} kind="ghost" disabled={disabled||busy} onPress={find}/>
+ return <View style={{gap:8}}>
+  <Button compact label={t('servings.title')} icon="coffee" kind="secondary" disabled={disabled||busy} onPress={find}/>
   {rows?.length===0||error?<Notice message={t('servings.missing')}/>:null}
-  {rows?.map(r=><Button key={r.id} label={t('servings.option',{unit:unit(r.unit),source:r.label,amount:r.amount,basis:t(`units.${r.basis}`)})} kind="ghost" disabled={disabled} onPress={()=>{setSelected(r);setError(false);}}/>)}
+  {rows?.map(r=><Button compact key={r.id} label={t('servings.option',{unit:unit(r.unit),source:r.label,amount:r.amount,basis:t(`units.${r.basis}`)})} kind="ghost" disabled={disabled} onPress={()=>{setSelected(r);setError(false);}}/>)}
   {selected?<><AppText variant="caption">{confidence(selected.confidence)}</AppText><TextField label={t('servings.count')} value={quantity} onChangeText={setQuantity} editable={!disabled} maxLength={12} keyboardType="decimal-pad"/>
-   <Button label={t('servings.apply')} disabled={disabled} onPress={()=>{try{onChange(applyServing(food,selected,quantity));setError(false);}catch{setError(true);}}}/></>:null}
+   <Button compact kind="secondary" label={t('servings.apply')} disabled={disabled} onPress={()=>{try{onChange(applyServing(food,selected,quantity));setError(false);}catch{setError(true);}}}/></>:null}
   {original?.food_specific_conversion_id?<AppText variant="caption">{`${original.quantity} × ${original.unit} → ${food.amount} ${t(`units.${food.basis??'g'}`)}`}</AppText>:null}
  </View>;
 }

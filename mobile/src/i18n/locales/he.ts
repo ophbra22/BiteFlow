@@ -385,6 +385,7 @@ export const he: Dictionary = {
     notConfiguredTitle: 'אין כתובת שרת',
     notConfiguredBody: 'הגרסה הזו נבנתה בלי כתובת שרת. יש להגדיר EXPO_PUBLIC_API_URL ולבנות שוב.',
   },
+  crash: { title: 'משהו השתבש', body: 'לא ניתן לפתוח את המסך. נסו שוב כדי לטעון אותו מחדש.', retry: 'נסו שוב' },
   errors: {
     network: 'לא ניתן להגיע לשרת. כדאי לבדוק את החיבור ולנסות שוב.',
     timeout: 'השרת לא ענה בזמן. כדאי לנסות שוב.',

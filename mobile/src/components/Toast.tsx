@@ -1,8 +1,9 @@
 import { ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, radius, spacing } from '@/theme/tokens';
+import { haptics } from '@/native/haptics';
+import { colors, motion, radius, spacing } from '@/theme/tokens';
 
 import { AppText } from './AppText';
 import { Icon } from './Icon';
@@ -14,15 +15,46 @@ const ToastContext = createContext<Show>(() => undefined);
 /** A short confirmation, such as "Saved to your journal". Also read out by screen readers. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [message, setMessage] = useState<string | null>(null);
+  const [entrance] = useState(() => new Animated.Value(0));
+  const [reduceMotion, setReduceMotion] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
 
-  const show = useCallback<Show>((text) => {
-    if (timer.current) clearTimeout(timer.current);
-    setMessage(text);
-    AccessibilityInfo.announceForAccessibility(text);
-    timer.current = setTimeout(() => setMessage(null), 3200);
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled()
+      .catch(() => false)
+      .then((enabled) => {
+        if (active) setReduceMotion(enabled);
+      });
+    const subscription = AccessibilityInfo.addEventListener?.('reduceMotionChanged', setReduceMotion);
+    return () => {
+      active = false;
+      subscription?.remove?.();
+    };
   }, []);
+
+  const show = useCallback<Show>(
+    (text) => {
+      if (timer.current) clearTimeout(timer.current);
+      setMessage(text);
+      haptics.success();
+      AccessibilityInfo.announceForAccessibility(text);
+      if (reduceMotion) {
+        entrance.setValue(1);
+      } else {
+        entrance.setValue(0);
+        Animated.timing(entrance, {
+          toValue: 1,
+          duration: motion.base,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start();
+      }
+      timer.current = setTimeout(() => setMessage(null), 3200);
+    },
+    [entrance, reduceMotion],
+  );
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);
@@ -34,14 +66,25 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={show}>
       {children}
       {message ? (
-        <View pointerEvents="none" style={[styles.wrap, { top: insets.top + spacing.sm }]}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.wrap,
+            {
+              top: insets.top + spacing.sm,
+              opacity: entrance,
+              transform: reduceMotion
+                ? undefined
+                : [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }],
+            },
+          ]}>
           <View style={styles.toast}>
             <Icon name="check-circle" color={colors.ground} size={20} />
             <AppText variant="bodyStrong" color={colors.ground} style={styles.text}>
               {message}
             </AppText>
           </View>
-        </View>
+        </Animated.View>
       ) : null}
     </ToastContext.Provider>
   );
@@ -56,7 +99,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     backgroundColor: colors.sand,
-    borderRadius: radius.lg,
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     maxWidth: 480,

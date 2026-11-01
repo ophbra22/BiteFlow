@@ -3,6 +3,7 @@ import {useI18n} from '@/i18n/I18nProvider';
 import {healthEnabled,isHealthConnect} from '@/native/health/platform';
 import {emptyChoices,type Choices} from '@/native/health/types';
 import {useHealth} from './HealthProvider';
+import {Chip} from './Chip';
 import {Screen} from './Screen';import {Header} from './Header';import {Button} from './Button';import {Notice} from './Notice';import {AppText} from './AppText';
 export function HealthSettings(){const service=useHealth();return service?<Editor service={service}/>:null;}
 function Editor({service}:{service:NonNullable<ReturnType<typeof useHealth>>}){
@@ -28,10 +29,10 @@ function Editor({service}:{service:NonNullable<ReturnType<typeof useHealth>>}){
    {state.more?<Notice message={he?'קיימות רשומות נוספות. לחצו על סנכרון להמשך.':'More records remain. Use Sync / retry to continue.'}/>:null}
   </>:null}
   <AppText>{state.connected?(he?'מחובר':'Connected'):(he?'מנותק':'Disconnected')}</AppText>
-  {(Object.keys(labels) as (keyof Choices)[]).map(k=><Button key={k} disabled={!healthEnabled||state.busy} label={labels[k]+': '+(choices[k]?(he?'פעיל':'on'):(he?'כבוי':'off'))} onPress={()=>setChoices({...choices,[k]:!choices[k]})}/>)}
+  {(Object.keys(labels) as (keyof Choices)[]).map(k=><Chip toggle selected={choices[k]} key={k} disabled={!healthEnabled||state.busy} label={labels[k]+': '+(choices[k]?(he?'פעיל':'on'):(he?'כבוי':'off'))} onPress={()=>setChoices({...choices,[k]:!choices[k]})}/>)}
   <Button label={he?'חיבור הנתונים שנבחרו':'Connect selected data'} disabled={!healthEnabled||state.busy||!Object.values(choices).some(Boolean)} onPress={()=>{void action(async()=>{await service.connect(choices);await service.sync();});}}/>
-  <Button label={he?'סנכרון וניסיון חוזר':'Sync / retry'} disabled={!healthEnabled||!state.connected||state.busy} onPress={()=>{void action(()=>service.sync());}}/>
-  <Button label={he?'ניתוק':'Disconnect'} disabled={!state.connected} onPress={()=>{void action(()=>service.disconnect());}}/>
+  <Button compact kind="secondary" icon="refresh-cw" label={he?'סנכרון וניסיון חוזר':'Sync / retry'} disabled={!healthEnabled||!state.connected||state.busy} onPress={()=>{void action(()=>service.sync());}}/>
+  <Button compact kind="ghost" label={he?'ניתוק':'Disconnect'} disabled={!state.connected} onPress={()=>{void action(()=>service.disconnect());}}/>
   {state.exportFailed?<Notice message={(he?'ייצואים שעדיין ממתינים: ':'Exports still pending: ')+state.exportFailed}/>:null}
   {state.repair?<Notice message={he?'מחיקות מסוימות לא אושרו. הן נשארו ממתינות; יש לבדוק ולתקן ב-Health Connect. נתונים אחרים יכולים להסתנכרן.':'Some deletions are unacknowledged and remain pending. Review and repair in Health Connect; other data can continue syncing.'}/>:null}
   {state.busy?<Notice message={he?'מסנכרן…':'Syncing…'}/>:null}

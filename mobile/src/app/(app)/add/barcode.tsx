@@ -9,6 +9,8 @@ import { errorMessageKey } from '@/api/messages';
 import { useAuth } from '@/auth/AuthProvider';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
+import { Chip } from '@/components/Chip';
+import { Disclosure } from '@/components/Disclosure';
 import { Header } from '@/components/Header';
 import { IconButton } from '@/components/IconButton';
 import { Notice } from '@/components/Notice';
@@ -22,6 +24,7 @@ import { validateBarcode } from '@/domain/validation';
 import { useI18n } from '@/i18n/I18nProvider';
 import { ltr } from '@/i18n/format';
 import type { TKey } from '@/i18n/translate';
+import { haptics } from '@/native/haptics';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 type Status =
@@ -52,8 +55,10 @@ export default function BarcodeLookup() {
     try {
       const product = await api.product(barcode);
       await start(productDraft(newKey(), product, getAddIntent()));
+      haptics.success();
       router.replace('/add/review');
     } catch (error) {
+      haptics.warning();
       if (isApiError(error) && error.kind === 'notFound') setStatus({ name: 'notFound', barcode });
       else if (isApiError(error) && error.kind === 'unavailable') setStatus({ name: 'unavailable', barcode });
       else setStatus({ name: 'error', message: errorMessageKey(error, 'product') });
@@ -99,7 +104,40 @@ export default function BarcodeLookup() {
   };
 
   const working = status.name === 'looking' || status.name === 'reading';
-  const canScan = permission?.granted && !cameraFailed;
+  const canScan = !!permission?.granted && !cameraFailed;
+  const workingText =
+    status.name === 'looking' ? t('barcode.lookingUp', { barcode: ltr(status.barcode) }) : t('barcode.readingPhoto');
+
+  const manualEntry = (
+    <>
+      <TextField
+        testID="barcode-digits"
+        label={t('barcode.digitsLabel')}
+        hint={t('barcode.digitsHint')}
+        value={digits}
+        onChangeText={(text) => {
+          setDigits(text.replace(/[^\d\s]/g, ''));
+          setDigitsError(null);
+        }}
+        error={digitsError ? t(digitsError) : null}
+        ltr
+        keyboardType="number-pad"
+        inputMode="numeric"
+        maxLength={18}
+        returnKeyType="search"
+        onSubmitEditing={submitDigits}
+        editable={!working}
+      />
+      <Button
+        testID="barcode-lookup"
+        kind="secondary"
+        icon="search"
+        label={t('barcode.lookUp')}
+        onPress={submitDigits}
+        disabled={working}
+      />
+    </>
+  );
 
   return (
     <Screen header={<Header title={t('barcode.title')} />}>
@@ -115,7 +153,19 @@ export default function BarcodeLookup() {
             onMountError={() => setCameraFailed(true)}
             accessibilityLabel={t('a11y.scanner')}
           />
-          <View style={styles.frame} pointerEvents="none" />
+          <View style={styles.frame} pointerEvents="none">
+            <View style={[styles.corner, styles.topStart]} />
+            <View style={[styles.corner, styles.topEnd]} />
+            <View style={[styles.corner, styles.bottomStart]} />
+            <View style={[styles.corner, styles.bottomEnd]} />
+          </View>
+          {status.name === 'idle' ? (
+            <View style={styles.aim} pointerEvents="none">
+              <AppText variant="label" center>
+                {t('barcode.aim')}
+              </AppText>
+            </View>
+          ) : null}
           <View style={styles.torch}>
             <IconButton
               icon={torch ? 'zap-off' : 'zap'}
@@ -124,14 +174,22 @@ export default function BarcodeLookup() {
               onPress={() => setTorch((value) => !value)}
             />
           </View>
+          {working ? (
+            <View style={styles.progress} accessibilityLiveRegion="polite">
+              <ActivityIndicator size="large" color={colors.sand} />
+              <AppText center variant="bodyStrong">
+                {workingText}
+              </AppText>
+            </View>
+          ) : null}
         </View>
       ) : null}
-      {canScan && status.name === 'idle' ? (
-        <AppText variant="caption" color={colors.muted} center>
-          {t('barcode.aim')}
-        </AppText>
-      ) : null}
 
+      {!permission ? (
+        <View style={styles.pending} accessibilityLabel={t('common.loading')}>
+          <ActivityIndicator color={colors.sand} />
+        </View>
+      ) : null}
       {permission && !permission.granted && permission.canAskAgain ? (
         <Notice icon="camera" title={t('permissions.cameraTitle')} message={t('permissions.cameraBody')}>
           <Button testID="allow-camera" label={t('permissions.allow')} onPress={requestPermission} />
@@ -139,19 +197,15 @@ export default function BarcodeLookup() {
       ) : null}
       {permission && !permission.granted && !permission.canAskAgain ? (
         <Notice tone="warning" icon="camera-off" message={t('permissions.cameraDenied')}>
-          <Button kind="secondary" label={t('permissions.openSettings')} onPress={() => Linking.openSettings()} />
+          <Button compact kind="secondary" label={t('permissions.openSettings')} onPress={() => Linking.openSettings()} />
         </Notice>
       ) : null}
       {cameraFailed ? <Notice tone="warning" icon="camera-off" message={t('barcode.simulatorNote')} /> : null}
 
-      {working ? (
-        <View style={styles.center} accessibilityLiveRegion="polite">
+      {working && !canScan ? (
+        <View style={styles.pending} accessibilityLiveRegion="polite">
           <ActivityIndicator color={colors.sand} />
-          <AppText center>
-            {status.name === 'looking'
-              ? t('barcode.lookingUp', { barcode: ltr(status.barcode) })
-              : t('barcode.readingPhoto')}
-          </AppText>
+          <AppText center>{workingText}</AppText>
         </View>
       ) : null}
 
@@ -161,73 +215,78 @@ export default function BarcodeLookup() {
           title={t('barcode.notFoundTitle')}
           message={t('barcode.notFoundBody', { barcode: ltr(status.barcode) })}>
           <Button testID="enter-manually" label={t('barcode.enterManually')} onPress={enterManually} />
-          <Button kind="ghost" label={t('barcode.scanAgain')} onPress={() => setStatus({ name: 'idle' })} />
+          <Button compact kind="ghost" label={t('barcode.scanAgain')} onPress={() => setStatus({ name: 'idle' })} />
         </Notice>
       ) : null}
       {status.name === 'unavailable' ? (
         <Notice tone="error" title={t('barcode.unavailableTitle')} message={t('barcode.unavailableBody')}>
           <Button kind="secondary" label={t('common.retry')} onPress={() => lookUp(status.barcode)} />
-          <Button kind="ghost" label={t('barcode.enterManually')} onPress={enterManually} />
+          <Button compact kind="ghost" label={t('barcode.enterManually')} onPress={enterManually} />
         </Notice>
       ) : null}
       {status.name === 'error' ? (
         <Notice tone="error" message={t(status.message)}>
-          <Button kind="secondary" label={t('barcode.scanAgain')} onPress={() => setStatus({ name: 'idle' })} />
+          <Button compact kind="secondary" label={t('barcode.scanAgain')} onPress={() => setStatus({ name: 'idle' })} />
         </Notice>
       ) : null}
 
-      <View style={styles.manual}>
-        <TextField
-          testID="barcode-digits"
-          label={t('barcode.digitsLabel')}
-          hint={t('barcode.digitsHint')}
-          value={digits}
-          onChangeText={(text) => {
-            setDigits(text.replace(/[^\d\s]/g, ''));
-            setDigitsError(null);
-          }}
-          error={digitsError ? t(digitsError) : null}
-          ltr
-          keyboardType="number-pad"
-          inputMode="numeric"
-          maxLength={18}
-          returnKeyType="search"
-          onSubmitEditing={submitDigits}
-          editable={!working}
-        />
-        <Button
-          testID="barcode-lookup"
-          kind="secondary"
-          icon="search"
-          label={t('barcode.lookUp')}
-          onPress={submitDigits}
-          disabled={working}
-        />
-        <Button kind="ghost" icon="image" label={t('barcode.fromPhoto')} onPress={fromPhoto} disabled={working} />
+      {/* With a working camera the typed fallback stays out of the way; without one it is the main path. */}
+      {canScan ? (
+        <Disclosure key="scanner" label={t('barcode.enterDigits')}>
+          {manualEntry}
+        </Disclosure>
+      ) : (
+        <View key="typed" style={styles.manual}>
+          {manualEntry}
+        </View>
+      )}
+      <View style={styles.chips}>
+        <Chip icon="image" label={t('barcode.fromPhoto')} onPress={fromPhoto} disabled={working} />
       </View>
     </Screen>
   );
 }
 
+const CORNER = 28;
+const STROKE = 3;
+
 const styles = StyleSheet.create({
   camera: {
     width: '100%',
-    aspectRatio: 4 / 3,
+    aspectRatio: 1,
     borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  frame: {
-    width: '78%',
-    height: '46%',
-    borderRadius: radius.md,
-    borderWidth: 2,
-    borderColor: colors.sand,
-    opacity: 0.85,
+  frame: { width: '78%', height: '40%' },
+  corner: { position: 'absolute', width: CORNER, height: CORNER, borderColor: colors.sand },
+  topStart: { top: 0, left: 0, borderTopWidth: STROKE, borderLeftWidth: STROKE, borderTopLeftRadius: radius.sm },
+  topEnd: { top: 0, right: 0, borderTopWidth: STROKE, borderRightWidth: STROKE, borderTopRightRadius: radius.sm },
+  bottomStart: { bottom: 0, left: 0, borderBottomWidth: STROKE, borderLeftWidth: STROKE, borderBottomLeftRadius: radius.sm },
+  bottomEnd: { bottom: 0, right: 0, borderBottomWidth: STROKE, borderRightWidth: STROKE, borderBottomRightRadius: radius.sm },
+  aim: {
+    position: 'absolute',
+    top: spacing.lg,
+    left: spacing.lg,
+    right: spacing.lg,
+    alignItems: 'center',
   },
   torch: { position: 'absolute', bottom: spacing.sm, right: spacing.sm },
-  center: { gap: spacing.md, alignItems: 'center', paddingVertical: spacing.md },
+  progress: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    backgroundColor: colors.scrim,
+  },
+  pending: { gap: spacing.md, alignItems: 'center', paddingVertical: spacing.lg },
   manual: { gap: spacing.md },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 });

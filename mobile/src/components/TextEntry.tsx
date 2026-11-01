@@ -13,6 +13,8 @@ import {TextField} from './TextField';
 import {Button} from './Button';
 import {Notice} from './Notice';
 import {AppText} from './AppText';
+import {Chip} from './Chip';
+import {colors} from '@/theme/tokens';
 
 export type VoiceSlotProps={onTranscript:(value:string)=>void;onRecordingChange:(active:boolean)=>void;disabled?:boolean};
 type Props={mode:'text'|'voice';VoiceSlot?:ComponentType<VoiceSlotProps>};
@@ -38,13 +40,13 @@ function TextForm({mode,VoiceSlot}:Props){
   finally{if(id===generation.current)setBusy(false);}
  };
  return <Screen header={<Header title={t(mode==='voice'?'text.voiceTitle':'text.title')}/>}>
-  <AppText>{t('text.hint')}</AppText>
+  <AppText color={colors.muted}>{t('text.hint')}</AppText>
   {VoiceSlot?<VoiceSlot disabled={busy} onTranscript={change} onRecordingChange={setRecording}/>:null}
   <TextField testID="food-description" label={t('text.description')} value={input} onChangeText={change} maxLength={2000} multiline editable={!busy&&!recording}/>
-  <Button kind="ghost" label={t(allowAi?'text.aiOn':'text.aiOff')} disabled={busy||recording} onPress={()=>setAllowAi(v=>!v)}/>
-  {allowAi?<AppText variant="caption">{t('text.aiPrivacy')}</AppText>:null}
+  <Chip toggle selected={allowAi} icon="zap" label={t(allowAi?'text.aiOn':'text.aiOff')} disabled={busy||recording} onPress={()=>setAllowAi(v=>!v)}/>
+  {allowAi?<AppText variant="caption" color={colors.muted}>{t('text.aiPrivacy')}</AppText>:null}
   {failure?<Notice tone="error" message={t('text.failed')}/>:null}
-  {busy?<Button label={t('common.cancel')} onPress={()=>{generation.current++;abort.current?.abort();setBusy(false);}}/>:<Button testID="parse-text" label={t('text.review')} disabled={!input.trim()||recording} onPress={parse}/>}
-  <Button kind="ghost" label={t('add.manual')} onPress={async()=>{generation.current++;abort.current?.abort();await start(manualDraft(newKey(),getAddIntent()));router.replace('/add/review');}}/>
+  {busy?<Button kind="secondary" label={t('common.cancel')} onPress={()=>{generation.current++;abort.current?.abort();setBusy(false);}}/>:<Button testID="parse-text" label={t('text.review')} disabled={!input.trim()||recording} onPress={parse}/>}
+  <Button compact kind="ghost" label={t('add.manual')} onPress={async()=>{generation.current++;abort.current?.abort();await start(manualDraft(newKey(),getAddIntent()));router.replace('/add/review');}}/>
  </Screen>;
 }

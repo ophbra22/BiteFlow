@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     minHeight: 56,
     borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: 'transparent',
+    borderColor: colors.fieldEdge,
     backgroundColor: colors.field,
     paddingHorizontal: spacing.lg,
   },

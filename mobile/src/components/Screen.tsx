@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Edge, SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, spacing } from '@/theme/tokens';
+import { colors, contentWidth, spacing } from '@/theme/tokens';
 
 /**
  * True for screens shown inside the "add a meal" modal. On iOS that modal is a
@@ -52,7 +52,7 @@ export function Screen({
     <ScrollView
       testID="screen-scroll"
       style={styles.flex}
-      contentContainerStyle={[styles.content, padded && styles.padded]}
+      contentContainerStyle={[styles.content, styles.column, padded && styles.padded]}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       onLayout={() => setScrollReady(true)}
@@ -61,7 +61,7 @@ export function Screen({
       {children}
     </ScrollView>
   ) : (
-    <View style={[styles.flex, padded && styles.padded]}>{children}</View>
+    <View style={[styles.flex, styles.column, padded && styles.padded]}>{children}</View>
   );
   return (
     <SafeAreaView style={styles.safe} edges={safeEdges}
@@ -74,7 +74,7 @@ export function Screen({
       <KeyboardAvoidingView style={styles.flex} keyboardVerticalOffset={Platform.OS === 'ios' ? keyboardOffset : 0} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {header}
         {body}
-        {footer ? <View style={styles.footer}>{footer}</View> : null}
+        {footer ? <View style={[styles.footer, styles.column]}>{footer}</View> : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -83,7 +83,16 @@ export function Screen({
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.ground },
   flex: { flex: 1 },
+  // Keeps lines and cards at a readable width if the app runs on a wider screen.
+  column: { width: '100%', maxWidth: contentWidth, alignSelf: 'center' },
   content: { flexGrow: 1, gap: spacing.lg, paddingBottom: spacing.xl },
   padded: { paddingHorizontal: spacing.lg },
-  footer: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md, gap: spacing.sm },
+  footer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+  },
 });

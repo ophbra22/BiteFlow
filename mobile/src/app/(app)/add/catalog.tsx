@@ -1,14 +1,19 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { errorMessageKey } from '@/api/messages';
 import type { CatalogFood } from '@/api/types';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
+import { EmptyState } from '@/components/EmptyState';
 import { Header } from '@/components/Header';
+import { Icon, directional } from '@/components/Icon';
 import { Notice } from '@/components/Notice';
 import { Screen } from '@/components/Screen';
+import { Section } from '@/components/Section';
+import { Skeleton } from '@/components/Skeleton';
 import { TextField } from '@/components/TextField';
 import { useDraft } from '@/data/DraftProvider';
 import { getAddIntent } from '@/data/add-intent';
@@ -18,7 +23,7 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { formatNumber } from '@/i18n/format';
 import { foodName } from '@/i18n/translate';
 import type { TKey } from '@/i18n/translate';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, spacing } from '@/theme/tokens';
 
 const CATEGORY_ORDER = ['Fruit', 'Vegetables', 'Meals', 'Bakery', 'Dessert'];
 
@@ -83,64 +88,64 @@ export default function CatalogPicker() {
         {t('catalog.estimateNote')}
       </AppText>
 
-      {loading && !foods ? <ActivityIndicator color={colors.sand} accessibilityLabel={t('common.loading')} /> : null}
+      {loading && !foods ? (
+        <Card accessibilityLabel={t('common.loading')}>
+          <Skeleton height={36} />
+          <Skeleton height={36} />
+          <Skeleton height={36} />
+        </Card>
+      ) : null}
       {error ? (
         <Notice tone="error" title={t('catalog.loadFailed')} message={t(errorMessageKey(error))}>
-          <Button kind="secondary" label={t('common.retry')} onPress={reload} />
+          <Button compact kind="secondary" label={t('common.retry')} onPress={reload} />
         </Notice>
       ) : null}
-      {foods && groups.length === 0 ? (
-        <AppText color={colors.muted} center>
-          {t('catalog.noMatch', { query: query.trim() })}
-        </AppText>
-      ) : null}
+      {foods && groups.length === 0 ? <EmptyState icon="search" title={t('catalog.noMatch', { query: query.trim() })} /> : null}
 
       {groups.map(([category, items]) => (
-        <View key={category} style={styles.group}>
-          <AppText variant="label" color={colors.muted} accessibilityRole="header">
-            {categoryLabel(category)}
-          </AppText>
-          {items.map((food) => {
-            const name = foodName(language, food.id, food.name);
-            const kcal = t('catalog.kcalPer100', { kcal: formatNumber(language, food.calories) });
-            return (
-              <Pressable
-                key={food.id}
-                testID={`food-${food.id}`}
-                accessibilityRole="button"
-                accessibilityLabel={`${name}, ${kcal}`}
-                onPress={() => choose(food)}
-                style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-                <AppText style={styles.emoji} maxFontSizeMultiplier={1.3}>
-                  {food.emoji}
-                </AppText>
-                <View style={styles.text}>
-                  <AppText variant="bodyStrong">{name}</AppText>
-                  <AppText variant="caption" color={colors.muted}>
-                    {kcal}
+        <Section key={category} title={categoryLabel(category)}>
+          <Card flush>
+            {items.map((food, index) => {
+              const name = foodName(language, food.id, food.name);
+              const kcal = t('catalog.kcalPer100', { kcal: formatNumber(language, food.calories) });
+              return (
+                <Pressable
+                  key={food.id}
+                  testID={`food-${food.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${name}, ${kcal}`}
+                  onPress={() => choose(food)}
+                  style={({ pressed }) => [styles.row, index > 0 && styles.divider, pressed && styles.pressed]}>
+                  <AppText style={styles.emoji} maxFontSizeMultiplier={1.3}>
+                    {food.emoji}
                   </AppText>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
+                  <View style={styles.text}>
+                    <AppText variant="bodyStrong">{name}</AppText>
+                    <AppText variant="caption" color={colors.muted}>
+                      {kcal}
+                    </AppText>
+                  </View>
+                  <Icon name={directional.forward} size={18} color={colors.muted} />
+                </Pressable>
+              );
+            })}
+          </Card>
+        </Section>
       ))}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  group: { gap: spacing.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     minHeight: 60,
   },
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
   pressed: { backgroundColor: colors.field },
   emoji: { fontSize: 24, lineHeight: 30 },
   text: { flex: 1 },

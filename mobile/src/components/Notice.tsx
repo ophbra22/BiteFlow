@@ -7,7 +7,7 @@ import { colors, radius, spacing } from '@/theme/tokens';
 import { AppText } from './AppText';
 import { Icon, IconName } from './Icon';
 
-type Tone = 'info' | 'warning' | 'error';
+type Tone = 'info' | 'success' | 'warning' | 'error';
 
 type Props = {
   tone?: Tone;
@@ -20,10 +20,11 @@ type Props = {
   row?: boolean;
 };
 
-const tones: Record<Tone, { color: string; icon: IconName }> = {
-  info: { color: colors.muted, icon: 'info' },
-  warning: { color: colors.butter, icon: 'alert-circle' },
-  error: { color: colors.danger, icon: 'alert-triangle' },
+const tones: Record<Tone, { color: string; icon: IconName; background: string }> = {
+  info: { color: colors.muted, icon: 'info', background: colors.surface },
+  success: { color: colors.sage, icon: 'check-circle', background: colors.sageTint },
+  warning: { color: colors.butter, icon: 'alert-circle', background: colors.butterTint },
+  error: { color: colors.danger, icon: 'alert-triangle', background: colors.dangerTint },
 };
 
 /** An inline message: offline, a failed save, a note about where data comes from. */
@@ -34,7 +35,7 @@ export function Notice({ tone = 'info', title, message, icon, children, row }: P
   const hasChildren = Children.toArray(children).length > 0;
   return (
     <View
-      style={styles.box}
+      style={[styles.box, { backgroundColor: look.background }]}
       accessible={!hasChildren}
       accessibilityRole={tone === 'error' ? 'alert' : undefined}
       accessibilityLiveRegion={tone === 'info' ? 'none' : 'polite'}
@@ -64,7 +65,7 @@ export function Notice({ tone = 'info', title, message, icon, children, row }: P
 }
 
 const styles = StyleSheet.create({
-  box: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md },
+  box: { borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.md },
   row: { flexDirection: 'row', gap: spacing.md },
   icon: { paddingTop: 2 },
   text: { flex: 1, gap: 2 },

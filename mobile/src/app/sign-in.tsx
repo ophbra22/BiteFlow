@@ -1,11 +1,11 @@
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { errorMessageKey } from '@/api/messages';
 import { useAuth } from '@/auth/AuthProvider';
 import { AppText } from '@/components/AppText';
-import { AuthIntro, FormStack } from '@/components/AuthForm';
+import { AuthDivider, AuthIntro, FormStack } from '@/components/AuthForm';
 import { AppleSignInButton } from '@/components/AppleSignInButton';
 import { Button } from '@/components/Button';
 import { Notice } from '@/components/Notice';
@@ -49,7 +49,8 @@ export default function SignIn() {
       {sessionExpired && !failure ? <Notice tone="warning" message={t('auth.sessionExpired')} /> : null}
       {failure ? <Notice tone="error" message={t(failure)} /> : null}
       <AppleSignInButton onPress={signInWithApple} disabled={busy} />
-      <AppText variant="caption" center color={colors.muted}>{t('apple.orPassword')}</AppText>
+      {/* The divider only makes sense where the Apple button can appear. */}
+      {Platform.OS === 'ios' ? <AuthDivider label={t('apple.orPassword')} /> : null}
       <FormStack>
         <TextField
           testID="username"

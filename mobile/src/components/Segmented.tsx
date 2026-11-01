@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { haptics } from '@/native/haptics';
 import { colors, radius, spacing, touch } from '@/theme/tokens';
 
 import { AppText } from './AppText';
@@ -14,14 +15,18 @@ type Props<T extends string> = {
   disabled?: boolean;
 };
 
-/** A small set of exclusive choices. Wraps onto a second line with large text. */
+/**
+ * A small set of exclusive choices. Up to three share one track, like the native
+ * segmented control; longer sets keep two per row. Wraps with large text.
+ */
 export function Segmented<T extends string>({ label, options, value, onChange, disabled }: Props<T>) {
+  const inline = options.length <= 3;
   return (
     <View style={styles.wrap} accessibilityRole="radiogroup" accessibilityLabel={label}>
       <AppText variant="label" color={colors.muted}>
         {label}
       </AppText>
-      <View style={styles.row}>
+      <View style={[styles.row, inline && styles.track]}>
         {options.map((option) => {
           const selected = option.value === value;
           return (
@@ -31,8 +36,16 @@ export function Segmented<T extends string>({ label, options, value, onChange, d
               accessibilityLabel={option.label}
               accessibilityState={{ selected, disabled: !!disabled }}
               disabled={disabled}
-              onPress={() => onChange(option.value)}
-              style={[styles.item, selected && styles.selected]}>
+              onPress={() => {
+                if (!selected) haptics.selection();
+                onChange(option.value);
+              }}
+              style={[
+                styles.item,
+                inline && styles.itemInline,
+                selected && styles.selected,
+                disabled && styles.disabled,
+              ]}>
               {option.dot ? <View style={[styles.dot, { backgroundColor: option.dot }]} /> : null}
               <AppText
                 variant="label"
@@ -52,6 +65,7 @@ export function Segmented<T extends string>({ label, options, value, onChange, d
 const styles = StyleSheet.create({
   wrap: { gap: spacing.xs + 2 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  track: { backgroundColor: colors.field, borderRadius: radius.md, padding: 4, gap: 4 },
   item: {
     flexGrow: 1,
     // Two per row: "Breakfast" and the Hebrew meal names never break mid-word.
@@ -66,7 +80,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
+  itemInline: { flexBasis: '30%', backgroundColor: 'transparent', minHeight: touch, borderRadius: radius.sm },
   selected: { backgroundColor: colors.sand },
+  disabled: { opacity: 0.55 },
   dot: { width: 10, height: 10, borderRadius: 5 },
   text: { flexShrink: 1 },
 });

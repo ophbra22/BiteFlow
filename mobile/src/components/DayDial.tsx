@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   core: { width: '50%', alignItems: 'center', gap: spacing.sm },
   total: { alignSelf: 'stretch', alignItems: 'center' },
   add: {
-    minHeight: touch - 6,
+    minHeight: touch,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

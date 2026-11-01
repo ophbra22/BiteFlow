@@ -16,8 +16,23 @@ const ToastContext = createContext<Show>(() => undefined);
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [message, setMessage] = useState<string | null>(null);
   const [entrance] = useState(() => new Animated.Value(0));
+  const [reduceMotion, setReduceMotion] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled()
+      .catch(() => false)
+      .then((enabled) => {
+        if (active) setReduceMotion(enabled);
+      });
+    const subscription = AccessibilityInfo.addEventListener?.('reduceMotionChanged', setReduceMotion);
+    return () => {
+      active = false;
+      subscription?.remove?.();
+    };
+  }, []);
 
   const show = useCallback<Show>(
     (text) => {
@@ -25,16 +40,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       setMessage(text);
       haptics.success();
       AccessibilityInfo.announceForAccessibility(text);
-      entrance.setValue(0);
-      Animated.timing(entrance, {
-        toValue: 1,
-        duration: motion.base,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
+      if (reduceMotion) {
+        entrance.setValue(1);
+      } else {
+        entrance.setValue(0);
+        Animated.timing(entrance, {
+          toValue: 1,
+          duration: motion.base,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start();
+      }
       timer.current = setTimeout(() => setMessage(null), 3200);
     },
-    [entrance],
+    [entrance, reduceMotion],
   );
   useEffect(
     () => () => {
@@ -54,7 +73,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             {
               top: insets.top + spacing.sm,
               opacity: entrance,
-              transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }],
+              transform: reduceMotion
+                ? undefined
+                : [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }],
             },
           ]}>
           <View style={styles.toast}>

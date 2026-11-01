@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  itemInline: { flexBasis: '30%', backgroundColor: 'transparent', minHeight: touch - 8, borderRadius: radius.sm },
+  itemInline: { flexBasis: '30%', backgroundColor: 'transparent', minHeight: touch, borderRadius: radius.sm },
   selected: { backgroundColor: colors.sand },
   disabled: { opacity: 0.55 },
   dot: { width: 10, height: 10, borderRadius: 5 },

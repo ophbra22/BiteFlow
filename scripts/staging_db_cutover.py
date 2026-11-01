@@ -168,6 +168,9 @@ import json, sys
 from importlib.resources import files
 from pathlib import Path
 
+import pydantic  # Dependencies keep their normal caches; only foodlogger must skip them.
+
+sys.pycache_prefix = sys.argv[3]
 sys.path.insert(0, str(Path(sys.argv[1]).parent))
 from foodlogger.nutrition_reference import ReferenceCatalog
 
@@ -694,12 +697,11 @@ def verify_nutrition_fix_behavior(root: Path, commits: list[str]) -> dict[str, i
                 sys.executable,
                 "-I",
                 "-B",
-                "-X",
-                f"pycache_prefix={empty_cache}",
                 "-c",
                 CATALOG_CONTRACT_RUNNER,
                 str(package),
                 json.dumps([[query, preparation] for _, query, preparation, _, _ in cases]),
+                empty_cache,
             ],
             capture_output=True,
             text=True,

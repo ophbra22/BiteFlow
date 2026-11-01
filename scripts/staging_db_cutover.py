@@ -392,7 +392,18 @@ def validate_cutover_database_urls(
             raise ValueError(
                 "old_database_url and replacement target database must not be the same instance"
             )
-        if not any(old_id in old_info["host"] for old_id in EXPIRING_STAGING_DB_IDS):
+        old_host = old_info["host"].lower().rstrip(".")
+        valid_old_host = any(
+            old_host == old_id
+            or bool(
+                re.fullmatch(
+                    rf"{re.escape(old_id)}\.[a-z0-9-]+-postgres\.render\.com",
+                    old_host,
+                )
+            )
+            for old_id in EXPIRING_STAGING_DB_IDS
+        )
+        if not valid_old_host:
             raise ValueError(
                 f"old_database_url host {old_info['host']!r} does not match expected expiring "
                 f"staging database identifiers {list(EXPIRING_STAGING_DB_IDS)}"

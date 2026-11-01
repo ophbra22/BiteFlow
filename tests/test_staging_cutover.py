@@ -454,6 +454,16 @@ def test_parse_postgres_dsn_rejects_query_parameter_overrides(query_override):
             "postgresql://foodlogger_app:pw@dpg-unrelated-a.frankfurt-postgres.render.com/biteflow_staging_db",
             "does not match expected expiring staging database",
         ),
+        (
+            "postgresql://foodlogger_app:pw@dpg-d6q76n5m5p6s73f9k58g-a."
+            "frankfurt-postgres.render.com.unapproved.invalid/biteflow_staging_db",
+            "does not match expected expiring staging database",
+        ),
+        (
+            "postgresql://foodlogger_app:pw@evil-dpg-d6q76n5m5p6s73f9k58g-a."
+            "frankfurt-postgres.render.com/biteflow_staging_db",
+            "does not match expected expiring staging database",
+        ),
     ],
 )
 def test_validate_cutover_database_urls_enforces_production_and_legacy_checks_on_old_dsn(

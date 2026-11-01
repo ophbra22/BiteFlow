@@ -215,9 +215,10 @@ def test_day_dial_follows_the_journal_and_every_width_fits(browser_page):
     page.locator("#save-meal").click()
     expect(page.locator("#dial-dots circle.breakfast")).to_have_count(1)
     expect(page.locator(".meal-group-title.breakfast")).to_have_text("Breakfast")
-    assert page.locator("#share-carbs").evaluate(
-        "el => Number(el.style.getPropertyValue('--share'))"
-    ) > 0
+    assert (
+        page.locator("#share-carbs").evaluate("el => Number(el.style.getPropertyValue('--share'))")
+        > 0
+    )
     for width, height in [(390, 844), (768, 1024), (1440, 900)]:
         page.set_viewport_size({"width": width, "height": height})
         assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")

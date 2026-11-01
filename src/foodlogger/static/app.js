@@ -241,6 +241,7 @@ async function loadJournal() {
   const day = $("journal-date").value;
   const version = ++state.journalVersion;
   if (!day || !$("journal-date").checkValidity()) {
+    $("journal-entries").removeAttribute("aria-busy");
     $("journal-entries").replaceChildren();
     renderDay([], null);
     $("empty-journal").hidden = true;

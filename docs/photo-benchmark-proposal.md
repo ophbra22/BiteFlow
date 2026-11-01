@@ -3,7 +3,7 @@
 ## 1. Objective & Scope Boundary
 This document specifies the design, dataset schema, licensing gates, ground-truth protocol, metrics, and quota/cost guardrails for BiteFlow's held-out multimodal meal-photo evaluation benchmark (**G58**).
 
-- **Zero Live API Calls in CI / Offline Suites:** All automated tests (`tests/test_nutrition_eval.py`, `tests/test_meal_analysis_evaluation.py`) run strictly offline without calling live vision providers. Currently, `scripts/evaluate_meal_analysis.py` accepts `--mode` (`synthetic` | `live`), `--output`, and `--interval-seconds`; under this proposal, live multimodal evaluation will be gated behind explicit opt-in flags (`--allow-live-api` and hard budget/case caps) before any full held-out run.
+- **Zero Live API Calls in CI / Offline Suites:** All automated tests (`tests/test_nutrition_eval.py`, `tests/test_meal_analysis_evaluation.py`) run strictly offline without calling live vision providers. Currently, `scripts/evaluate_meal_analysis.py` exposes `--mode {baseline,vision}`, `--output`, and `--interval-seconds` (default `13.0`); under this proposal, live multimodal evaluation (`--mode vision`) will be gated behind explicit opt-in flags (`--allow-live-api` and hard budget/case caps) before any full held-out run.
 - **No Extrapolation from Retrieval Benchmarks:** Offline USDA reference retrieval metrics (`evaluations/nutrition_reference/`) measure deterministic text normalization and lookup only; they must never be reported as photo recognition or portion estimation accuracy.
 
 ---
@@ -32,7 +32,7 @@ To stay within free-tier API quotas while covering real-world failure modes, the
 | **A. Gravimetric Single & Multi-Item Plates** | 25 | Everyday plates (eggs, chicken breast, rice, salad, salmon, pasta, fruits) weighed per component on a kitchen scale (`±1 g`). | `gravimetric` (ID + grams + kcal/macros) |
 | **B. Israeli & Middle Eastern Dishes** | 15 | Hummus, falafel, schnitzel, pita, cottage cheese, Israeli salad, plus composite dishes (`שקשוקה`, `סביח`, `בורקס`, `מלאווח`) that test decomposition vs. USDA abstention. | `gravimetric` / `decomposition` |
 | **C. Packaged & Ambiguous Preparation Cases** | 10 | Visually ambiguous items (fried vs. baked, skinless vs. skin-on, dressing on side vs. mixed, obscure sauces) testing clarification questions (`needs_clarification`). | `clarification_and_id` |
-| **D. Negative Controls & Abstention Cases** | 10 | Empty plates, non-food objects, severely blurred/dark frames, closed opaque containers, and pets/landscapes (`expected_outcome: "abstain"`). | `abstention` |
+| **D. Negative Controls & Abstention Cases** | 10 | Empty plates, non-food objects, severely blurred/dark frames, closed opaque containers, and pets/landscapes (`expected_status: "no_food"`). | `abstention` |
 
 ---
 
@@ -119,37 +119,35 @@ To support per-component portion MAE and canonical USDA reference verification i
 
 ---
 
-## 6. Evaluation Metrics & Proposed v2 Extensions
+## 6. Evaluation Metrics: Current v1 (`scripts/evaluate_meal_analysis.py`) vs. Proposed v2 Extensions
 
-Currently, `scripts/evaluate_meal_analysis.py` computes component detection precision/recall/$F_1$ (via `match_components`), meal-level calorie MAE (`calorie_mae_completed_runs`), non-food abstention rate (`non_food_abstention_rate`), and separates end-to-end recall from completed-run recall so unavailable images or failed runs are never counted as zero-error or successful abstentions.
+Currently, `scripts/evaluate_meal_analysis.py` implements `detection(expected, predicted)` and `summarize(rows)`, outputting the following exact v1 summary keys:
+- `completed`, `failed_or_blocked`, `completion_rate`
+- `tp`, `fp`, `fn`, `precision`, `recall`, `end_to_end_recall`, `missed_item_rate`, `false_discovery_rate`
+- `mean_latency_ms`
+- `mean_absolute_error` (`{"grams": ..., "calories": ..., "protein": ..., "fat": ..., "carbs": ...}` at the meal total level) and `error_sample_counts`
+- `paid_api_cost_usd`
 
-For the full **G58** held-out benchmark, `scripts/evaluate_meal_analysis.py` should be extended with per-component portion MAE/MAPE and USDA reference-ID accuracy across six primary metrics:
+For the full **G58** held-out benchmark, `scripts/evaluate_meal_analysis.py` will retain all existing v1 `summarize(rows)` keys and add the following v2 metrics:
 
-1. **Component Precision, Recall & $F_1$ (Implemented in v1):**
-   - Greedy bipartite matching between predicted components and expected labels using canonical normalized aliases (where qualifier mismatches like `"sweet potato"` vs. `"potato"` are rejected).
-   - $\text{Precision} = \frac{\text{TP}}{\text{TP} + \text{FP}}$, $\quad \text{Recall} = \frac{\text{TP}}{\text{TP} + \text{FN}}$.
-2. **Portion Estimation Error — Gram MAE & MAPE (Proposed v2 Extension):**
-   - Evaluated on matched true-positive components in `gravimetric` cases with item-level `grams`:
-   $$\text{Portion MAE (g)} = \frac{1}{M} \sum_{i=1}^{M} \left| \hat{g}_i - g_i \right|, \qquad \text{Portion MAPE (\%)} = \frac{100}{M} \sum_{i=1}^{M} \frac{\left| \hat{g}_i - g_i \right|}{g_i}$$
-3. **Meal Calorie & Macronutrient Error — Calorie MAE & MAPE (Calorie MAE Implemented in v1):**
-   - Evaluated on gravimetric plates with complete USDA reference coverage:
-   $$\text{Calorie MAE (kcal)} = \frac{1}{N_{\text{grav}}} \sum_{j=1}^{N_{\text{grav}}} \left| \widehat{\text{kcal}}_j - \text{kcal}_j \right|$$
-4. **USDA Grounding Coverage & Reference Accuracy (Proposed v2 Extension):**
-   - Fraction of predicted components that resolve to an auditable `fdc:*` record matching the ground-truth component's food identity and preparation.
-5. **Abstention & Negative-Control Specificity (Implemented in v1):**
-   - On Cohort D (`expected_status: "no_food"`), percentage of runs that return `status == "no_food"` with `0` fabricated food items (target: **100%**).
-6. **Failure Accounting (Implemented in v1):**
-   - Any HTTP/provider error, timeout, or unavailable image is recorded under `failed_cases` / `unavailable_images` and penalized as missed items in `recall_end_to_end`—never silently dropped or counted as a successful abstention.
+| Metric Area | Current v1 Implementation (`detection` / `summarize`) | Proposed v2 Extension for G58 |
+| :--- | :--- | :--- |
+| **1. Component Detection** | `detection(expected, predicted)` counts `tp`, `fp`, `fn` via `canonical()`; `summarize()` reports `precision`, `recall`, `end_to_end_recall`, `missed_item_rate`, `false_discovery_rate`. | Add `f1` ($\frac{2 \cdot \text{TP}}{2 \cdot \text{TP} + \text{FP} + \text{FN}}$) and expand `LABELS` in `canonical()` to cover the full 60-case benchmark vocabulary. |
+| **2. Portion Estimation Error** | Meal-level total gram MAE via `mean_absolute_error["grams"]` on `reference_total["grams"]`. | Add per-component gram MAE (`item_grams_mae`) and MAPE (`item_grams_mape`) matched against `expected_items[i].grams`: $\frac{1}{M} \sum_{i=1}^{M} |\hat{g}_i - g_i|$. |
+| **3. Calorie & Macro Error** | Meal-level `mean_absolute_error["calories"]`, `["protein"]`, `["fat"]`, `["carbs"]` and `error_sample_counts` over completed non-`no_food` runs. | Add meal-level calorie MAPE (`calorie_mape`) and per-component nutrient MAE on `gravimetric` cases. |
+| **4. USDA Reference Grounding** | Not tracked in v1 `summarize()`. | Add `usda_reference_accuracy`: fraction of matched components whose resolved `reference.id` matches `expected_items[i].usda_reference_id`. |
+| **5. Abstention / Negative Controls** | Evaluated via `detection([], predicted)` (`fp` count when `visible_food_labels` is `[]`). | Add explicit `non_food_abstention_rate` and `status_accuracy` over Cohort D (`expected_status == "no_food"` returning `status == "no_food"` and `foods == []`). |
+| **6. Failure & Quota Accounting** | Tracks `completed`, `failed_or_blocked`, `completion_rate`, and penalizes failed/blocked cases in `end_to_end_recall`. | Preserve `failed_or_blocked` and `end_to_end_recall` invariants without modification. |
 
 ---
 
 ## 7. Proposed Cost, Quota & Rate-Limit Guardrails
 
-Because the active Gemini API key operates on the **free tier**, live benchmark execution (`--mode live`, which currently supports `--interval-seconds 15.0`) should be extended with three additional guardrails before running the 60-case held-out set:
+Because the active Gemini API key operates on the **free tier**, live benchmark execution (`python scripts/evaluate_meal_analysis.py --mode vision`, which currently paces requests using `--interval-seconds` with a default of `13.0` s and stops on `VisionQuotaExceeded`) should be extended with three additional guardrails before running the 60-case held-out set:
 
 1. **Explicit Opt-In & Max-Cases Cap (Proposed CLI Flags):**
-   - Require `--allow-live-api` alongside `--mode live`, plus `--max-cases` (default `10` for smoke runs, max `60` for full release-candidate gate) and `--interval-seconds` (default `15.0` s pacing between requests) to prevent `429 RESOURCE_EXHAUSTED` failures.
+   - Require `--allow-live-api` when `--mode vision` is selected, plus `--max-cases` (default `10` for smoke runs, max `60` for full release-candidate gate) while retaining `--interval-seconds` (default `13.0` s pacing between requests) to prevent `429 RESOURCE_EXHAUSTED` failures.
 2. **Content-Addressable Response Caching (Proposed Eval-Only Cache):**
-   - Keyed by `(image_sha256, prompt_version_sha256, model_id)` in a local gitignored directory (`.eval_cache/`) so re-scoring deterministic USDA retrieval changes (`nutrition_reference.py`) costs **0 API calls**.
+   - Keyed by `(sha256, prompt_version_sha256, model_id)` in a local gitignored directory (`.eval_cache/`) so re-scoring deterministic USDA retrieval changes (`nutrition_reference.py`) costs **0 API calls**.
 3. **Hard Budget Circuit Breaker:**
-   - Abort the evaluation run immediately if consecutive provider errors exceed `3` or if total token usage exceeds the configured run ceiling (`--max-total-tokens 150000`).
+   - Complement the existing `VisionQuotaExceeded` stop with a circuit breaker that aborts if consecutive non-quota `VisionUnavailable` errors exceed `3` or if total token usage exceeds `--max-total-tokens 150000`.

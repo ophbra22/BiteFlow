@@ -15,6 +15,8 @@ export const colors = {
   field: '#294536',
   /** Hairlines between quiet areas. */
   line: '#2F4D3D',
+  /** Input outline: 3.2:1 on field and 4:1 on surface, so a field's edge is visible. */
+  fieldEdge: '#7A9484',
   /** Quiet fills behind icons and tinted notices. */
   sageTint: 'rgba(163, 194, 159, 0.16)',
   butterTint: 'rgba(232, 212, 139, 0.12)',

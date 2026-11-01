@@ -10,6 +10,7 @@ BiteFlow and the FoodLogger website share one brand: deep pine, warm sand, one s
 | Surface | `surface` | `#1E3529` | Cards and grouped lists |
 | Field | `field` | `#294536` | Inputs, secondary buttons, pressed rows, meter tracks |
 | Line | `line` | `#2F4D3D` | Hairlines |
+| Field edge | `fieldEdge` | `#7A9484` | Input outlines |
 | Text | `sand` | `#EFE6D3` | Primary text |
 | Quiet text | `muted` | `#A8B6A6` | Secondary text |
 | Action | `sage` / `onSage` | `#A3C29F` / `#14251D` | The one primary action per view |

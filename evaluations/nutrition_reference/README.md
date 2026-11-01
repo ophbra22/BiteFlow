@@ -11,7 +11,7 @@ This directory contains the deterministic offline evaluation benchmark for BiteF
 
 ## Baseline vs. Post-Improvement Metrics
 
-Evaluated against the 200-case benchmark before (`4a9d6b60c9304254136dd1eb7fb15f0b57968155`) and after expanding `ALIASES` (from 34 to 305 entries) and refining subject/category/recipe ranking in `src/foodlogger/nutrition_reference.py`:
+Evaluated against the 200-case benchmark before (`4a9d6b60c9304254136dd1eb7fb15f0b57968155`) and after expanding `ALIASES` (from 34 to 348 entries) and refining subject/category/recipe ranking in `src/foodlogger/nutrition_reference.py`:
 
 | Metric | Unmodified Baseline (`4a9d6b6`) | Post-Improvement | Delta |
 | :--- | :---: | :---: | :---: |

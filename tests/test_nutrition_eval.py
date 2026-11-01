@@ -153,9 +153,31 @@ def test_abstention_safety_never_fabricates_israeli_composite_dishes(
         )
 
 
+def test_fish_species_compound_dishes_and_whitespace_normalization(
+    catalog: ReferenceCatalog,
+) -> None:
+    """Ensure species queries do not break compound dishes and multi-space aliases normalize."""
+    for query in ("salmon sushi", "sushi topped with salmon"):
+        rows = catalog.search(query)
+        assert rows, f"Expected compound dish match for {query!r}"
+        assert rows[0].id == "fdc:2708969"
+
+    multi_space_pairs = [
+        ("חזה  עוף", "חזה עוף", "grilled"),
+        ("ביצה   קשה", "ביצה קשה", "boiled"),
+        ("תפוח  אדמה", "תפוח אדמה", "cooked"),
+        ("גבינת   קוטג'", "גבינת קוטג'", "unknown"),
+    ]
+    for spaced_query, clean_query, prep in multi_space_pairs:
+        spaced_rows = catalog.search(spaced_query, prep)
+        clean_rows = catalog.search(clean_query, prep)
+        assert spaced_rows and clean_rows
+        assert [r.id for r in spaced_rows] == [r.id for r in clean_rows]
+
+
 def test_aliases_only_map_to_clean_english_tokens() -> None:
     """Ensure ALIASES contains substantial Hebrew coverage and no fabricated numbers."""
-    assert len(ALIASES) >= 250
+    assert len(ALIASES) == 348
     for key, target in ALIASES.items():
         assert key == key.strip()
         assert target == target.strip()
@@ -165,13 +187,45 @@ def test_aliases_only_map_to_clean_english_tokens() -> None:
 def test_recorded_evaluation_report_matches_live_catalog(
     catalog: ReferenceCatalog, benchmark_data: dict
 ) -> None:
-    """Ensure the committed evaluation report is consistent with the benchmark fixture."""
+    """Ensure the committed evaluation report exactly matches live evaluation metrics."""
     report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
     assert report["benchmark_id"] == benchmark_data["benchmark_id"]
-    assert report["baseline_metrics"]["total_cases"] == benchmark_data["total_cases"]
-    assert report["improved_metrics"]["total_cases"] == benchmark_data["total_cases"]
-    assert (
-        report["improved_metrics"]["positive_top1_accuracy"]
-        > report["baseline_metrics"]["positive_top1_accuracy"]
+
+    cases = benchmark_data["cases"]
+    match_cases = [c for c in cases if c["expected_mode"] == "match"]
+    abstain_cases = [c for c in cases if c["expected_mode"] == "abstain"]
+
+    top1_correct = 0
+    top5_hits = 0
+    missing_matches = 0
+    wrong_top1 = 0
+    for case in match_cases:
+        rows = catalog.search(case["query"], case["preparation"], limit=5)
+        if not rows:
+            missing_matches += 1
+        else:
+            if _is_acceptable(rows[0].name, case["acceptable_prefixes"]):
+                top1_correct += 1
+            else:
+                wrong_top1 += 1
+            if any(_is_acceptable(r.name, case["acceptable_prefixes"]) for r in rows):
+                top5_hits += 1
+
+    correct_abstentions = sum(
+        1 for c in abstain_cases if not catalog.search(c["query"], c["preparation"], limit=5)
     )
-    assert report["improved_metrics"]["false_positive_abstentions"] == 0
+    false_positives = len(abstain_cases) - correct_abstentions
+
+    improved = report["improved_metrics"]
+    assert improved["total_cases"] == len(cases)
+    assert improved["match_cases"] == len(match_cases)
+    assert improved["abstain_cases"] == len(abstain_cases)
+    assert improved["positive_top1_correct"] == top1_correct
+    assert improved["positive_top1_accuracy"] == round(top1_correct / len(match_cases), 4)
+    assert improved["positive_top5_hits"] == top5_hits
+    assert improved["positive_top5_hit_rate"] == round(top5_hits / len(match_cases), 4)
+    assert improved["missing_matches"] == missing_matches
+    assert improved["wrong_top1_matches"] == wrong_top1
+    assert improved["correct_abstentions"] == correct_abstentions
+    assert improved["false_positive_abstentions"] == false_positives
+    assert improved["positive_top1_accuracy"] > report["baseline_metrics"]["positive_top1_accuracy"]

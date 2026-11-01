@@ -665,7 +665,7 @@ _CHEESE_KINDS = {
 def tokens(text):
     from foodlogger.food_providers import regional_query
 
-    text = regional_query(text)
+    text = re.sub(r"\s+", " ", regional_query(text)).strip()
     # Translate multiword foods before their component words (e.g. ביצה קשה).
     text = _ALIAS_PATTERN.sub(lambda m: ALIASES[m.group(0)], text)
     return {
@@ -769,9 +769,7 @@ class ReferenceCatalog:
             words.add("cracker")
         if "tzatziki" in words:
             words.add("dip")
-        if words & _FISH_SPECIES:
-            words.add("fish")
-        if words & _CHEESE_KINDS:
+        if words == {"feta"}:
             words.add("cheese")
         if words in ({"peas"}, {"pea"}):
             words.add("green")
@@ -798,6 +796,11 @@ class ReferenceCatalog:
         identity = words - COOKED - {"raw"}
         if not identity or identity <= {"meat", "vegetable", "fruit", "mixed", "dish"}:
             return ()
+        allowed_main = set(words)
+        if words & _FISH_SPECIES:
+            allowed_main.add("fish")
+        if words & _CHEESE_KINDS:
+            allowed_main.add("cheese")
         # All identity terms must occur: better no result than matching tahini
         # sauce to undiluted paste, or chicken breast to chicken soup.
         results = []
@@ -826,16 +829,14 @@ class ReferenceCatalog:
                     continue
             if (record_words & RECIPE_KINDS) - words:
                 continue
-            if (record_words & OTHER_MAIN_FOODS) - words:
+            if (record_words & OTHER_MAIN_FOODS) - allowed_main:
                 continue
             if "rendered fat" in name and "fat" not in words:
                 continue
             if preparation == "raw" and "raw" not in record_words and not identity <= IMPLICIT_RAW:
                 continue
             if preparation in COOKED and (
-                "raw" in record_words
-                or "uncooked" in record_words
-                or "unprepared" in record_words
+                "raw" in record_words or "uncooked" in record_words or "unprepared" in record_words
             ):
                 continue
             if (preparation == "raw" or "raw" in words) and record_words & COOKED:
@@ -868,8 +869,7 @@ class ReferenceCatalog:
                 preparation == "unknown"
                 and "raw" in record_words
                 and not (
-                    record_words
-                    & {"fish", "chicken", "beef", "pork", "turkey", "lamb", "veal"}
+                    record_words & {"fish", "chicken", "beef", "pork", "turkey", "lamb", "veal"}
                 )
             ):
                 score += 0.5

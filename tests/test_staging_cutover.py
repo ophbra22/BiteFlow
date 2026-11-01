@@ -1,8 +1,6 @@
 """Stage 0 regressions for render.yaml, 16-migration cutover, and staging smoke safety gates."""
 
 import importlib.util
-import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -261,9 +259,9 @@ def test_cutover_rejects_bad_app_role_or_owned_tables_before_gateway_configure(
             return _FakeAppConn()
         return _FakeOwnerConn()
 
-    fake_psycopg = types.ModuleType("psycopg")
-    fake_psycopg.connect = _fake_connect
-    monkeypatch.setitem(sys.modules, "psycopg", fake_psycopg)
+    import psycopg
+
+    monkeypatch.setattr(psycopg, "connect", _fake_connect)
 
     owner_dsn = (
         "postgresql://owner:ownerpass@dpg-replacement-a.frankfurt-postgres.render.com:5432/"
@@ -359,9 +357,9 @@ def test_cutover_resume_post_migration_succeeds_after_owner_migrations_committed
             return _FakeAppConn()
         return _FakeOwnerConn()
 
-    fake_psycopg = types.ModuleType("psycopg")
-    fake_psycopg.connect = _fake_connect
-    monkeypatch.setitem(sys.modules, "psycopg", fake_psycopg)
+    import psycopg
+
+    monkeypatch.setattr(psycopg, "connect", _fake_connect)
 
     owner_dsn = (
         "postgresql://owner:ownerpass@dpg-replacement-a.frankfurt-postgres.render.com:5432/"
@@ -414,3 +412,101 @@ def test_hosted_smoke_rejects_mismatched_commit_sha_before_any_writes():
             client=_FakeStagingClient(),
         )
     assert requests_sent == ["GET /api/health"]
+
+
+@pytest.mark.parametrize(
+    "query_override",
+    [
+        "host=other-target.invalid",
+        "hostaddr=198.51.100.10",
+        "port=6543",
+        "dbname=other_db",
+        "user=other_user",
+        "password=other_pass",
+        "service=prod",
+        "options=-csearch_path%3Dpublic",
+        "target_session_attrs=read-write",
+        "sslmode=disable",
+    ],
+)
+def test_parse_postgres_dsn_rejects_query_parameter_overrides(query_override):
+    module = _load_cutover_module()
+    dsn = (
+        "postgresql://foodlogger_app:pw@dpg-new-a.frankfurt-postgres.render.com:5432/"
+        f"biteflow_staging_db?{query_override}"
+    )
+    with pytest.raises(ValueError):
+        module._parse_postgres_dsn(dsn, "app_database_url")
+
+
+@pytest.mark.parametrize(
+    ("bad_old_dsn", "match"),
+    [
+        (
+            "postgresql://foodlogger_app:pw@db.slnmporlcbqnnkyebdmv.supabase.co:5432/postgres",
+            "forbidden production identifier",
+        ),
+        (
+            "postgresql://foodlogger_app:pw@dpg-d6q76n5m5p6s73f9k58g-a.frankfurt-postgres.render.com/car_log",
+            "forbidden production identifier",
+        ),
+        (
+            "postgresql://foodlogger_app:pw@dpg-unrelated-a.frankfurt-postgres.render.com/biteflow_staging_db",
+            "does not match expected expiring staging database",
+        ),
+    ],
+)
+def test_validate_cutover_database_urls_enforces_production_and_legacy_checks_on_old_dsn(
+    bad_old_dsn, match
+):
+    module = _load_cutover_module()
+    owner_dsn = (
+        "postgresql://owner:pw@dpg-replacement-a.frankfurt-postgres.render.com:5432/"
+        "biteflow_staging_db"
+    )
+    app_dsn = (
+        "postgresql://foodlogger_app:pw@dpg-replacement-a.frankfurt-postgres.render.com:5432/"
+        "biteflow_staging_db"
+    )
+    with pytest.raises(ValueError, match=match):
+        module.validate_cutover_database_urls(owner_dsn, app_dsn, old_dsn=bad_old_dsn)
+
+    valid_old_dsn = (
+        "postgresql://foodlogger_app:pw@dpg-d6q76n5m5p6s73f9k58g-a.frankfurt-postgres.render.com:5432/"
+        "biteflow_staging_db?sslmode=verify-full"
+    )
+    validated = module.validate_cutover_database_urls(owner_dsn, app_dsn, old_dsn=valid_old_dsn)
+    assert validated["host"] == "dpg-replacement-a.frankfurt-postgres.render.com"
+
+
+def test_parse_postgres_dsn_unquotes_percent_encoded_password():
+    module = _load_cutover_module()
+    dsn = (
+        "postgresql://foodlogger_app:fixture%40only%231%252@"
+        "dpg-replacement-a.frankfurt-postgres.render.com:5432/biteflow_staging_db?sslmode=verify-full"
+    )
+    parsed = module._parse_postgres_dsn(dsn, "app_database_url")
+    assert parsed["password"] == "fixture@only#1%2"
+    assert parsed["connection_options"]["password"] == "fixture@only#1%2"
+
+
+def test_fastapi_health_endpoint_reports_render_git_commit(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from foodlogger.app import create_app
+    from foodlogger.security import Settings
+
+    module = _load_cutover_module()
+    expected_sha = "4a9d6b60c9304254136dd1eb7fb15f0b57968155"
+    monkeypatch.setenv("RENDER_GIT_COMMIT", expected_sha)
+
+    app = create_app(db_path=tmp_path / "health.sqlite3", settings=Settings())
+    with TestClient(app) as client:
+        resp = client.get("/api/health")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["commit"] == expected_sha
+        assert module.verify_deployed_commit_sha(body, expected_sha, root=ROOT) == expected_sha
+        with pytest.raises(AssertionError, match="Deployed commit SHA mismatch"):
+            module.verify_deployed_commit_sha(body, "deadbeef1234567", root=ROOT)

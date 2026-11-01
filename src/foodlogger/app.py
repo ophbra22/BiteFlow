@@ -80,6 +80,48 @@ logger = logging.getLogger(__name__)
 PACKAGE = Path(__file__).parent
 COOKIE = "foodlogger_session"
 IDEMPOTENCY_KEY = re.compile(r"[A-Za-z0-9_-]{16,64}")
+GIT_SHA = re.compile(r"[0-9a-fA-F]{7,40}")
+
+
+def _resolve_git_head(repo_root: Path | None = None) -> str | None:
+    root = repo_root or PACKAGE.parents[1]
+    git_dir = root / ".git"
+    head_file = git_dir / "HEAD"
+    try:
+        if not head_file.is_file():
+            return None
+        head_text = head_file.read_text(encoding="utf-8").strip()
+        if head_text.startswith("ref: "):
+            ref = head_text[5:].strip()
+            ref_file = git_dir / ref
+            if ref_file.is_file():
+                candidate = ref_file.read_text(encoding="utf-8").strip()
+                if GIT_SHA.fullmatch(candidate):
+                    return candidate.lower()
+            packed = git_dir / "packed-refs"
+            if packed.is_file():
+                for line in packed.read_text(encoding="utf-8").splitlines():
+                    if not line or line.startswith(("#", "^")):
+                        continue
+                    parts = line.split(" ", 1)
+                    if len(parts) == 2 and parts[1].strip() == ref and GIT_SHA.fullmatch(parts[0]):
+                        return parts[0].lower()
+        elif GIT_SHA.fullmatch(head_text):
+            return head_text.lower()
+    except OSError:
+        return None
+    return None
+
+
+_DEFAULT_GIT_COMMIT = _resolve_git_head()
+
+
+def _deployed_commit_sha() -> str | None:
+    for env_key in ("RENDER_GIT_COMMIT", "FOODLOGGER_GIT_COMMIT", "GIT_COMMIT"):
+        value = (os.getenv(env_key) or "").strip()
+        if GIT_SHA.fullmatch(value):
+            return value.lower()
+    return _DEFAULT_GIT_COMMIT
 
 
 def resolve_session(auth, request: Request) -> tuple[dict | None, bool]:
@@ -371,7 +413,11 @@ def create_app(
     def health():
         with journal.connect() as db:
             db.execute("SELECT 1").fetchone()
-        return {"status": "ok", "model": predictor.name, "version": "2.1.0"}
+        payload = {"status": "ok", "model": predictor.name, "version": "2.1.0"}
+        commit = _deployed_commit_sha()
+        if commit:
+            payload["commit"] = commit
+        return payload
 
     @app.post("/api/auth/register", status_code=201)
     def register(credentials: Credentials, request: Request, response: Response):

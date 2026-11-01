@@ -20,7 +20,7 @@ import subprocess
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 import httpx
 from fastapi.testclient import TestClient
@@ -246,26 +246,101 @@ def validate_staging_origin(
     return f"https://{parsed.netloc}"
 
 
+ALLOWED_DSN_QUERY_KEYS: frozenset[str] = frozenset({"sslmode", "sslrootcert"})
+ALLOWED_CONNINFO_KEYS: frozenset[str] = frozenset(
+    {"host", "port", "dbname", "user", "password", "sslmode", "sslrootcert"}
+)
+
+
 def _parse_postgres_dsn(dsn: str, label: str) -> dict:
     if not dsn or not isinstance(dsn, str):
         raise ValueError(f"{label} must be a non-empty PostgreSQL URL")
-    parsed = urlsplit(dsn.strip())
+    raw = dsn.strip()
+    parsed = urlsplit(raw)
     if parsed.scheme.lower() not in ("postgresql", "postgres"):
         raise ValueError(f"{label} must use postgresql:// scheme")
-    host = (parsed.hostname or "").strip().lower()
-    port = parsed.port or 5432
-    dbname = parsed.path.lstrip("/").strip()
-    username = parsed.username or ""
-    password = parsed.password or ""
-    if not host or not dbname:
+    if parsed.fragment:
+        raise ValueError(f"{label} must not contain a URL fragment")
+
+    for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+        norm_key = key.strip().lower()
+        if norm_key not in ALLOWED_DSN_QUERY_KEYS:
+            raise ValueError(
+                f"{label} contains forbidden DSN query parameter {key!r}; "
+                "only sslmode and sslrootcert are permitted"
+            )
+        if norm_key == "sslmode" and value.strip() != "verify-full":
+            raise ValueError(f"{label} requires sslmode=verify-full (got {value!r})")
+
+    host = unquote(parsed.hostname or "").strip().lower()
+    port = int(parsed.port or 5432)
+    dbname = unquote(parsed.path.lstrip("/").strip())
+    username = unquote(parsed.username) if parsed.username is not None else ""
+    password = unquote(parsed.password) if parsed.password is not None else ""
+    if not host or not dbname or "/" in dbname:
         raise ValueError(f"{label} must include both hostname and database name")
+    if not username:
+        raise ValueError(f"{label} must specify a username")
+
+    if not ssl.get_default_verify_paths().cafile:
+        import certifi
+
+        os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+
+    from psycopg.conninfo import conninfo_to_dict
+
+    try:
+        conninfo = conninfo_to_dict(raw)
+    except Exception as exc:
+        raise ValueError(f"{label} is not a valid PostgreSQL conninfo URL") from exc
+
+    extra_keys = set(conninfo.keys()) - ALLOWED_CONNINFO_KEYS
+    if extra_keys:
+        raise ValueError(
+            f"{label} contains forbidden libpq conninfo parameters: {sorted(extra_keys)}"
+        )
+
+    db_options = Database(raw).connection_options
+    conn_tuple = (
+        str(conninfo.get("host") or "").strip().lower(),
+        int(conninfo.get("port") or 5432),
+        str(conninfo.get("dbname") or "").strip(),
+        str(conninfo.get("user") or ""),
+        str(conninfo.get("password") or ""),
+    )
+    db_tuple = (
+        str(db_options.get("host") or "").strip().lower(),
+        int(db_options.get("port") or 5432),
+        str(db_options.get("dbname") or "").strip(),
+        str(db_options.get("user") or ""),
+        str(db_options.get("password") or ""),
+    )
+    url_tuple = (host, port, dbname, username, password)
+    if url_tuple != conn_tuple or url_tuple != db_tuple:
+        raise ValueError(
+            f"{label} URL components do not match parsed Database/libpq connection options"
+        )
+
     return {
         "host": host,
         "port": port,
         "dbname": dbname,
         "username": username,
         "password": password,
+        "connection_options": dict(db_options),
     }
+
+
+def _reject_forbidden_production_dsn(label: str, raw_dsn: str, info: dict) -> None:
+    lowered = raw_dsn.lower()
+    for forbidden in FORBIDDEN_PRODUCTION_IDENTIFIERS:
+        if (
+            forbidden in info["host"]
+            or forbidden in info["dbname"].lower()
+            or forbidden in info["username"].lower()
+            or forbidden in lowered
+        ):
+            raise ValueError(f"{label} matches forbidden production identifier {forbidden!r}")
 
 
 def validate_cutover_database_urls(
@@ -282,14 +357,8 @@ def validate_cutover_database_urls(
         ("admin_database_url", owner_dsn, owner_info),
         ("app_database_url", app_dsn, app_info),
     ):
+        _reject_forbidden_production_dsn(label, raw_dsn, info)
         lowered = raw_dsn.lower()
-        for forbidden in FORBIDDEN_PRODUCTION_IDENTIFIERS:
-            if (
-                forbidden in info["host"]
-                or forbidden in info["dbname"].lower()
-                or forbidden in lowered
-            ):
-                raise ValueError(f"{label} matches forbidden production identifier {forbidden!r}")
         for old_id in EXPIRING_STAGING_DB_IDS:
             if old_id in info["host"] or old_id in lowered:
                 raise ValueError(
@@ -305,8 +374,6 @@ def validate_cutover_database_urls(
             f"(host, port, dbname); got {owner_target} vs {app_target}"
         )
 
-    if not owner_info["username"]:
-        raise ValueError("admin_database_url must specify an owner username")
     if app_info["username"] != "foodlogger_app":
         raise ValueError(
             f"app_database_url must authenticate as 'foodlogger_app' (got {app_info['username']!r})"
@@ -319,10 +386,16 @@ def validate_cutover_database_urls(
 
     if old_dsn:
         old_info = _parse_postgres_dsn(old_dsn, "old_database_url")
+        _reject_forbidden_production_dsn("old_database_url", old_dsn, old_info)
         old_target = (old_info["host"], old_info["port"], old_info["dbname"])
         if old_target == owner_target or old_info["host"] == owner_info["host"]:
             raise ValueError(
                 "old_database_url and replacement target database must not be the same instance"
+            )
+        if not any(old_id in old_info["host"] for old_id in EXPIRING_STAGING_DB_IDS):
+            raise ValueError(
+                f"old_database_url host {old_info['host']!r} does not match expected expiring "
+                f"staging database identifiers {list(EXPIRING_STAGING_DB_IDS)}"
             )
 
     return {

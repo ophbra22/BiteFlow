@@ -17,6 +17,7 @@ import shutil
 import sqlite3
 import ssl
 import subprocess
+import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,10 +26,10 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 import httpx
 from fastapi.testclient import TestClient
 
+import foodlogger
 from foodlogger.ai_gateway import AIGateway, BudgetPolicy
 from foodlogger.app import create_app
 from foodlogger.database import Database
-from foodlogger.nutrition_reference import ReferenceCatalog
 from foodlogger.security import Settings
 from foodlogger.text_input import SplitFood, SplitResult
 
@@ -159,6 +160,30 @@ NUTRITION_FIX_CONTRACTS: dict[str, tuple[tuple[str, str, str | None, str | None]
         ("omelette with tomatoes and dark green vegetables", "fried", None, "fdc:2707236"),
     ),
 }
+
+# Runs in an isolated interpreter (-I ignores PYTHONPATH and the working directory) with the
+# target's src first on sys.path, and reports every foodlogger file it actually used.
+CATALOG_CONTRACT_RUNNER = """
+import json, sys
+from importlib.resources import files
+from pathlib import Path
+
+sys.path.insert(0, str(Path(sys.argv[1]).parent))
+from foodlogger.nutrition_reference import ReferenceCatalog
+
+catalog = ReferenceCatalog()
+results = [
+    [row.id for row in catalog.search(query, preparation, limit=8)]
+    for query, preparation in json.loads(sys.argv[2])
+]
+used = [
+    getattr(module, "__file__", None)
+    for name, module in sys.modules.items()
+    if name == "foodlogger" or name.startswith("foodlogger.")
+]
+used.append(str(files("foodlogger").joinpath("data/usda_reference.json")))
+print(json.dumps({"results": results, "used": used}))
+"""
 STAGING_PROJECT_ID = "gen-lang-client-0101662511"
 STAGING_SERVICE_IDS: tuple[str, ...] = (
     "srv-d6q78f450q8c73f3376g",
@@ -634,77 +659,149 @@ def verify_tls_and_role_contract(sample_dsn: str | None = None) -> dict:
     }
 
 
-def verify_nutrition_fix_behavior(commits: list[str]) -> dict[str, int]:
-    """Run each commit's catalog contract against the imported foodlogger code."""
-    catalog = ReferenceCatalog()
+def _git_binary() -> str:
+    git_bin = shutil.which("git") or r"C:\Program Files\Git\cmd\git.exe"
+    if not Path(git_bin).exists():
+        raise AssertionError("git is required to verify the nutrition fix commits")
+    return git_bin
+
+
+def _git_ok(root: Path, *args: str) -> bool:
+    res = subprocess.run([_git_binary(), "-C", str(root), *args], capture_output=True)
+    return res.returncode == 0
+
+
+def _git_output(root: Path, *args: str) -> str:
+    return subprocess.check_output([_git_binary(), "-C", str(root), *args], text=True).strip()
+
+
+def _require_commit_sha(commit: str | None) -> str:
+    sha = (commit or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{7,40}", sha):
+        raise ValueError(f"expected_commit must be a 7-40 character hex git SHA (got {commit!r})")
+    return sha
+
+
+def verify_nutrition_fix_behavior(root: Path, commits: list[str]) -> dict[str, int]:
+    """Run each commit's catalog contract against root's own code and catalog data."""
+    package = (root / "src" / "foodlogger").resolve()
+    cases = [(commit, *case) for commit in commits for case in NUTRITION_FIX_CONTRACTS[commit]]
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-B",
+            "-c",
+            CATALOG_CONTRACT_RUNNER,
+            str(package),
+            json.dumps([[query, preparation] for _, query, preparation, _, _ in cases]),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if run.returncode != 0:
+        raise AssertionError(
+            f"Catalog contract run failed against {package}: {run.stderr[-500:].strip()}"
+        )
+    output = json.loads(run.stdout)
+    for used in output["used"]:
+        if not used or not Path(used).resolve().is_relative_to(package):
+            raise AssertionError(f"Catalog contract used {used!r}, outside {package}")
     checked: dict[str, int] = {}
-    for commit in commits:
-        contracts = NUTRITION_FIX_CONTRACTS[commit]
-        for query, preparation, required_top, forbidden in contracts:
-            ids = [row.id for row in catalog.search(query, preparation, limit=8)]
-            if (required_top and ids[:1] != [required_top]) or forbidden in ids:
-                raise AssertionError(
-                    f"Nutrition fix {commit} regressed for {query!r} ({preparation}): {ids[:3]}"
-                )
-        checked[commit] = len(contracts)
+    for (commit, query, preparation, required_top, forbidden), ids in zip(
+        cases, output["results"], strict=True
+    ):
+        if (required_top and ids[:1] != [required_top]) or forbidden in ids:
+            raise AssertionError(
+                f"Nutrition fix {commit} regressed for {query!r} ({preparation}): {ids[:3]}"
+            )
+        checked[commit] = checked.get(commit, 0) + 1
     return checked
 
 
 def verify_commit_and_nutrition_fixes(
     root: Path = ROOT,
     target_commit: str = "HEAD",
+    *,
+    allow_behavioral_fallback: bool = False,
 ) -> dict:
-    """Require the nutrition fixes in target_commit.
+    """Require the nutrition fixes in target_commit, by proven git ancestry by default.
 
-    Ancestry stays mandatory for every commit object present locally. Only a commit
-    absent from a shallow clone falls back to catalog contracts, and only when those
-    contracts actually exercise target_commit: the clean, checked-out HEAD.
+    Only local-verify sets allow_behavioral_fallback. A commit absent from a shallow clone
+    then falls back to catalog contracts, when they exercise target_commit: the checked-out
+    HEAD, with nothing but bytecode caches differing from it under src/foodlogger.
     """
-    git_bin = shutil.which("git") or r"C:\Program Files\Git\cmd\git.exe"
-    head_sha = None
     ancestors: dict[str, bool] = {}
     ancestry_unverifiable: list[str] = []
     behavioral_contract: dict[str, int] = {}
-    if Path(git_bin).exists():
-
-        def git_ok(*args: str) -> bool:
-            res = subprocess.run([git_bin, "-C", str(root), *args], capture_output=True)
-            return res.returncode == 0
-
-        def git_output(*args: str) -> str:
-            return subprocess.check_output([git_bin, "-C", str(root), *args], text=True).strip()
-
-        head_sha = git_output("rev-parse", target_commit)
-        shallow = git_output("rev-parse", "--is-shallow-repository") == "true"
-        for commit in REQUIRED_NUTRITION_COMMITS:
-            if git_ok("cat-file", "-e", f"{commit}^{{commit}}"):
-                ancestors[commit] = git_ok("merge-base", "--is-ancestor", commit, head_sha)
-            elif shallow:
-                ancestry_unverifiable.append(commit)
-            else:
-                ancestors[commit] = False
-        if not all(ancestors.values()):
+    if not _git_ok(root, "rev-parse", "--verify", "--quiet", f"{target_commit}^{{commit}}"):
+        raise AssertionError(
+            f"Cannot prove nutrition fix ancestry: {target_commit} is not a commit in {root}. "
+            "Fetch full history and retry."
+        )
+    head_sha = _git_output(root, "rev-parse", "--verify", f"{target_commit}^{{commit}}")
+    shallow = _git_output(root, "rev-parse", "--is-shallow-repository") == "true"
+    for commit in REQUIRED_NUTRITION_COMMITS:
+        if _git_ok(root, "cat-file", "-e", f"{commit}^{{commit}}"):
+            ancestors[commit] = _git_ok(root, "merge-base", "--is-ancestor", commit, head_sha)
+        elif shallow:
+            ancestry_unverifiable.append(commit)
+        else:
+            ancestors[commit] = False
+    if not all(ancestors.values()):
+        raise AssertionError(
+            f"Missing required nutrition commits in {target_commit} ({head_sha}): {ancestors}"
+        )
+    if ancestry_unverifiable:
+        if not allow_behavioral_fallback:
             raise AssertionError(
-                f"Missing required nutrition commits in {target_commit} ({head_sha}): {ancestors}"
+                f"Unproven ancestry of {ancestry_unverifiable} in {target_commit} ({head_sha}): "
+                "this mode needs full history. Run `git fetch --unshallow` and retry."
             )
-        if ancestry_unverifiable:
-            if head_sha != git_output("rev-parse", "HEAD"):
-                raise AssertionError(
-                    f"Shallow clone cannot verify {ancestry_unverifiable} in {target_commit} "
-                    f"({head_sha}): catalog contracts only exercise the checked-out HEAD"
-                )
-            if not git_ok("diff", "--quiet", "HEAD", "--", "src/foodlogger"):
-                raise AssertionError(
-                    f"Shallow clone cannot verify {ancestry_unverifiable}: src/foodlogger "
-                    "differs from HEAD"
-                )
-            behavioral_contract = verify_nutrition_fix_behavior(ancestry_unverifiable)
+        if head_sha != _git_output(root, "rev-parse", "HEAD"):
+            raise AssertionError(
+                f"Shallow clone cannot verify {ancestry_unverifiable} in {target_commit} "
+                f"({head_sha}): catalog contracts only exercise the checked-out HEAD"
+            )
+        changes = [
+            line
+            for line in _git_output(
+                root,
+                "status",
+                "--porcelain",
+                "--ignored",
+                "--untracked-files=all",
+                "--",
+                "src/foodlogger",
+            ).splitlines()
+            if "__pycache__" not in line.split("/")
+        ]
+        if changes:
+            raise AssertionError(
+                f"Shallow clone cannot verify {ancestry_unverifiable}: src/foodlogger "
+                f"differs from HEAD: {changes[:5]}"
+            )
+        behavioral_contract = verify_nutrition_fix_behavior(root, ancestry_unverifiable)
     return {
         "head_sha": head_sha,
         "required_nutrition_commits": ancestors,
         "ancestry_unverifiable": ancestry_unverifiable,
         "behavioral_contract": behavioral_contract,
     }
+
+
+def require_proven_ancestry(
+    root: Path, commit: str | None, *, must_be_checked_out: bool = False
+) -> str:
+    """Pre-flight for live modes: run before any connection, request, or write."""
+    sha = _require_commit_sha(commit)
+    resolved = verify_commit_and_nutrition_fixes(root, target_commit=sha)["head_sha"]
+    if must_be_checked_out and resolved != _git_output(root, "rev-parse", "HEAD"):
+        raise AssertionError(
+            f"expected_commit {sha} is not the checked-out HEAD, which supplies the migrations"
+        )
+    return resolved
 
 
 def verify_deployed_commit_sha(
@@ -714,12 +811,8 @@ def verify_deployed_commit_sha(
     headers: dict | None = None,
     root: Path = ROOT,
 ) -> str:
-    """Verify /api/health deployed commit matches or descends from expected_commit."""
-    expected = (expected_commit or "").strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{7,40}", expected):
-        raise ValueError(
-            f"expected_commit must be a 7-40 character hex git SHA (got {expected_commit!r})"
-        )
+    """Verify /api/health reports expected_commit or a descendant, with proven ancestry."""
+    expected = _require_commit_sha(expected_commit)
     hdrs = {k.lower(): v for k, v in (headers or {}).items()}
     reported_raw = (
         health_body.get("commit")
@@ -740,29 +833,13 @@ def verify_deployed_commit_sha(
         raise AssertionError(f"/api/health reported an invalid commit SHA: {reported_raw!r}")
 
     prefix_match = reported.startswith(expected) or expected.startswith(reported)
-    descendant_match = False
-    git_bin = shutil.which("git") or r"C:\Program Files\Git\cmd\git.exe"
-    if not prefix_match and Path(git_bin).exists():
-        res = subprocess.run(
-            [git_bin, "-C", str(root), "merge-base", "--is-ancestor", expected, reported],
-            capture_output=True,
-        )
-        descendant_match = res.returncode == 0
-
-    if not (prefix_match or descendant_match):
+    if not prefix_match and not _git_ok(root, "merge-base", "--is-ancestor", expected, reported):
         raise AssertionError(
             f"Deployed commit SHA mismatch on /api/health: reported {reported!r} "
             f"does not match or descend from expected {expected!r}"
         )
 
-    if Path(git_bin).exists():
-        cat = subprocess.run(
-            [git_bin, "-C", str(root), "cat-file", "-t", reported],
-            capture_output=True,
-            text=True,
-        )
-        if cat.returncode == 0:
-            verify_commit_and_nutrition_fixes(root, target_commit=reported)
+    verify_commit_and_nutrition_fixes(root, target_commit=reported)
     return reported
 
 
@@ -840,8 +917,10 @@ def run_smoke_against_client(
     root: Path = ROOT,
 ) -> dict:
     base_url = str(getattr(client, "base_url", "") or "").rstrip("/")
-    if base_url and base_url != "http://testserver":
+    if base_url != "http://testserver":
         validate_staging_origin(base_url, allow_staging_host=allow_staging_host)
+        if not expected_commit:
+            raise ValueError("Smoke against a hosted origin requires expected_commit")
 
     checks: list[dict] = []
 
@@ -1055,6 +1134,7 @@ def run_hosted_smoke(
     validated_origin = validate_staging_origin(origin, allow_staging_host=allow_staging_host)
     if not expected_commit or not expected_commit.strip():
         raise ValueError("hosted-smoke requires --expected-commit to verify /api/health SHA")
+    require_proven_ancestry(root, expected_commit)
     if client is not None:
         return run_smoke_against_client(
             client,
@@ -1074,8 +1154,13 @@ def run_hosted_smoke(
 
 
 def run_local_verification(root: Path = ROOT) -> dict:
+    imported = Path(foodlogger.__file__).resolve().parent
+    if imported != (root / "src" / "foodlogger").resolve():
+        raise AssertionError(
+            f"local-verify imported foodlogger from a different checkout: {imported}"
+        )
     blueprints = verify_render_blueprints(root)
-    commits = verify_commit_and_nutrition_fixes(root)
+    commits = verify_commit_and_nutrition_fixes(root, allow_behavioral_fallback=True)
     tls_contract = verify_tls_and_role_contract()
     with tempfile.TemporaryDirectory(prefix="biteflow-t0-cutover-") as tmp:
         db_file = Path(tmp) / "staging_rehearsal.sqlite3"
@@ -1154,7 +1239,10 @@ def apply_postgres_cutover(
     from psycopg import sql
     from psycopg.rows import dict_row
 
-    # Phase 0: Pre-flight target identity, TLS contract, and origin validation before connect/write.
+    # Phase 0: Pre-flight ancestry, target identity, TLS contract, and origin before connect/write.
+    if not expected_commit:
+        raise ValueError("cutover requires --expected-commit, the checked-out HEAD")
+    require_proven_ancestry(root, expected_commit, must_be_checked_out=True)
     manifest = verify_migration_manifest(root)
     target_identity = validate_cutover_database_urls(owner_dsn, app_dsn, old_dsn=old_dsn)
     resolved_app_password = (
@@ -1166,8 +1254,6 @@ def apply_postgres_cutover(
         )
     if staging_url:
         validate_staging_origin(staging_url, allow_staging_host=allow_staging_host)
-        if not expected_commit:
-            raise ValueError("--expected-commit is required when --staging-url is provided")
 
     # Phase 1: Optional read-only export of non-secret AI ledger from expiring staging database.
     exported_ledger = None
@@ -1250,7 +1336,7 @@ def apply_postgres_cutover(
     if staging_url:
         hosted_smoke = run_hosted_smoke(
             staging_url,
-            expected_commit=expected_commit or "",
+            expected_commit=expected_commit,
             allow_live_ai=allow_live_ai,
             allow_staging_host=allow_staging_host,
             root=root,
@@ -1316,6 +1402,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--app-password", default=None)
     parser.add_argument("--old-database-url", default=None)
     parser.add_argument("--resume-post-migration", action="store_true")
+    parser.add_argument(
+        "--run-hosted-smoke",
+        action="store_true",
+        help="After cutover, also smoke --origin. Only once staging uses the replacement DB.",
+    )
     parser.add_argument("--allow-live-ai", action="store_true")
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args(argv)
@@ -1337,8 +1428,8 @@ def main(argv: list[str] | None = None) -> int:
             app_password,
             old_dsn=old_dsn,
             resume_post_migration=args.resume_post_migration,
-            staging_url=args.origin if args.expected_commit else None,
-            expected_commit=args.expected_commit,
+            staging_url=args.origin if args.run_hosted_smoke else None,
+            expected_commit=args.expected_commit or os.getenv("EXPECTED_COMMIT"),
             allow_staging_host=args.allow_staging_host,
             allow_live_ai=args.allow_live_ai,
             root=ROOT,

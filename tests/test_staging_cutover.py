@@ -274,8 +274,11 @@ def test_cutover_rejects_bad_app_role_or_owned_tables_before_gateway_configure(
         "biteflow_staging_db"
     )
 
+    monkeypatch.setattr(module, "require_proven_ancestry", lambda *args, **kwargs: "fixture")
     with pytest.raises(AssertionError, match=expected_error):
-        module.apply_postgres_cutover(owner_dsn, app_dsn, "apppass", root=ROOT)
+        module.apply_postgres_cutover(
+            owner_dsn, app_dsn, "apppass", expected_commit="4a9d6b6", root=ROOT
+        )
 
     assert configure_calls == []
 
@@ -371,11 +374,13 @@ def test_cutover_resume_post_migration_succeeds_after_owner_migrations_committed
         "postgresql://foodlogger_app:apppass@dpg-replacement-a.frankfurt-postgres.render.com:5432/"
         "biteflow_staging_db"
     )
+    monkeypatch.setattr(module, "require_proven_ancestry", lambda *args, **kwargs: "fixture")
     report = module.apply_postgres_cutover(
         owner_dsn,
         app_dsn,
         "apppass",
         resume_post_migration=True,
+        expected_commit="4a9d6b6",
         root=ROOT,
     )
     assert report["status"] == "passed"
@@ -383,8 +388,9 @@ def test_cutover_resume_post_migration_succeeds_after_owner_migrations_committed
     assert len(configure_calls) == 1
 
 
-def test_hosted_smoke_rejects_mismatched_commit_sha_before_any_writes():
+def test_hosted_smoke_rejects_mismatched_commit_sha_before_any_writes(monkeypatch):
     module = _load_cutover_module()
+    monkeypatch.setattr(module, "require_proven_ancestry", lambda *args, **kwargs: "fixture")
     requests_sent: list[str] = []
 
     class _FakeResponse:
@@ -511,6 +517,12 @@ def test_fastapi_health_endpoint_reports_render_git_commit(tmp_path, monkeypatch
     module = _load_cutover_module()
     expected_sha = "4a9d6b60c9304254136dd1eb7fb15f0b57968155"
     monkeypatch.setenv("RENDER_GIT_COMMIT", expected_sha)
+    proven: list[str] = []
+    monkeypatch.setattr(
+        module,
+        "verify_commit_and_nutrition_fixes",
+        lambda root, target_commit: proven.append(target_commit),
+    )
 
     app = create_app(db_path=tmp_path / "health.sqlite3", settings=Settings())
     with TestClient(app) as client:
@@ -520,12 +532,23 @@ def test_fastapi_health_endpoint_reports_render_git_commit(tmp_path, monkeypatch
         assert body["status"] == "ok"
         assert body["commit"] == expected_sha
         assert module.verify_deployed_commit_sha(body, expected_sha, root=ROOT) == expected_sha
+        assert proven == [expected_sha]
         with pytest.raises(AssertionError, match="Deployed commit SHA mismatch"):
             module.verify_deployed_commit_sha(body, "deadbeef1234567", root=ROOT)
 
 
 GIT = shutil.which("git") or r"C:\Program Files\Git\cmd\git.exe"
 NUTRITION_FILE = "src/foodlogger/nutrition_reference.py"
+STAGING_ORIGIN = "https://foodlogger-staging.onrender.com"
+OWNER_DSN = (
+    "postgresql://owner:ownerpass@dpg-replacement-a.frankfurt-postgres.render.com:5432/"
+    "biteflow_staging_db"
+)
+APP_DSN = (
+    "postgresql://foodlogger_app:apppass@dpg-replacement-a.frankfurt-postgres.render.com:5432/"
+    "biteflow_staging_db"
+)
+OLD_DSN = "postgresql://foodlogger_app:oldpass@dpg-d6q76n5m5p6s73f9k58g-a/foodlogger"
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -533,23 +556,31 @@ def _git(cwd: Path, *args: str) -> str:
     return subprocess.check_output([GIT, "-C", str(cwd), *identity, *args], text=True).strip()
 
 
-def _commit_nutrition_file(repo: Path, content: str) -> str:
-    path = repo / NUTRITION_FILE
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+def _commit_file(repo: Path, relative: str, content: str | None) -> str:
+    path = repo / relative
+    if content is None:
+        path.unlink()
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
     _git(repo, "add", ".")
-    _git(repo, "commit", "-q", "-m", content)
+    _git(repo, "commit", "-q", "-m", f"change {relative}")
     return _git(repo, "rev-parse", "HEAD")
 
 
 @pytest.fixture
 def source_repo(tmp_path) -> Path:
-    """A full repository with two commits and none of the real nutrition commits."""
+    """A full repository with a working catalog and none of the real nutrition commits."""
     repo = tmp_path / "source"
     repo.mkdir()
     _git(repo, "init", "-q")
-    _commit_nutrition_file(repo, "first\n")
-    _commit_nutrition_file(repo, "second\n")
+    shutil.copytree(
+        ROOT / "src/foodlogger",
+        repo / "src/foodlogger",
+        ignore=shutil.ignore_patterns("__pycache__", "*.tflite", "static", "templates"),
+    )
+    _commit_file(repo, "marker.txt", "first\n")
+    _commit_file(repo, "marker.txt", "second\n")
     return repo
 
 
@@ -562,15 +593,48 @@ def _shallow_clone(source: Path, target: Path, depth: int = 1) -> Path:
     return target
 
 
+class _ConnectionReached(Exception):
+    pass
+
+
+@pytest.fixture
+def connections(monkeypatch) -> list[dict]:
+    import psycopg
+
+    opened: list[dict] = []
+
+    def _record(**kwargs):
+        opened.append(kwargs)
+        raise _ConnectionReached
+
+    monkeypatch.setattr(psycopg, "connect", _record)
+    return opened
+
+
+class _RecordingStagingClient:
+    base_url = STAGING_ORIGIN
+
+    def __init__(self):
+        self.calls: list[str] = []
+
+    def get(self, path, **kwargs):
+        self.calls.append(f"GET {path}")
+        raise AssertionError(f"Unexpected GET {path}")
+
+    def post(self, path, **kwargs):
+        self.calls.append(f"POST {path}")
+        raise AssertionError(f"Unexpected POST {path}")
+
+
 def test_nutrition_contracts_cover_every_required_commit():
     module = _load_cutover_module()
     assert set(module.NUTRITION_FIX_CONTRACTS) == set(module.REQUIRED_NUTRITION_COMMITS)
 
 
-def test_shallow_clone_verifies_absent_commits_through_catalog_contracts(source_repo, tmp_path):
+def test_local_fallback_runs_contracts_against_the_target_clone(source_repo, tmp_path):
     module = _load_cutover_module()
     clone = _shallow_clone(source_repo, tmp_path / "clone")
-    report = module.verify_commit_and_nutrition_fixes(clone)
+    report = module.verify_commit_and_nutrition_fixes(clone, allow_behavioral_fallback=True)
     assert report["head_sha"] == _git(clone, "rev-parse", "HEAD")
     # Ancestry was not proven, so it must not be reported as proven.
     assert report["required_nutrition_commits"] == {}
@@ -578,49 +642,115 @@ def test_shallow_clone_verifies_absent_commits_through_catalog_contracts(source_
     assert report["behavioral_contract"] == {"089f789": 2, "3658a17": 3, "4a9d6b6": 2}
 
 
-def test_shallow_clone_fails_when_a_nutrition_fix_regressed(source_repo, tmp_path, monkeypatch):
+def test_fallback_is_off_unless_requested(source_repo, tmp_path):
     module = _load_cutover_module()
     clone = _shallow_clone(source_repo, tmp_path / "clone")
-
-    class RegressedCatalog:
-        def search(self, query, preparation="unknown", limit=8):
-            return []
-
-    monkeypatch.setattr(module, "ReferenceCatalog", RegressedCatalog)
-    with pytest.raises(AssertionError, match="Nutrition fix 089f789 regressed"):
+    with pytest.raises(AssertionError, match="Unproven ancestry"):
         module.verify_commit_and_nutrition_fixes(clone)
 
 
-def test_shallow_clone_rejects_a_target_other_than_checked_out_head(source_repo, tmp_path):
+def test_fallback_detects_a_regression_in_the_target_not_the_imported_package(
+    source_repo, tmp_path
+):
+    module = _load_cutover_module()
+    regressed = (source_repo / NUTRITION_FILE).read_text(encoding="utf-8") + (
+        "\n\nReferenceCatalog.search = lambda self, query, preparation='unknown', limit=8: []\n"
+    )
+    _commit_file(source_repo, NUTRITION_FILE, regressed)
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+    with pytest.raises(AssertionError, match="Nutrition fix 089f789 regressed"):
+        module.verify_commit_and_nutrition_fixes(clone, allow_behavioral_fallback=True)
+
+
+def test_broken_target_fails_while_a_working_package_is_imported_elsewhere(source_repo, tmp_path):
+    import foodlogger
+
+    module = _load_cutover_module()
+    _commit_file(source_repo, NUTRITION_FILE, 'raise RuntimeError("fixture broken catalog")\n')
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+    assert not Path(foodlogger.__file__).is_relative_to(clone)
+    with pytest.raises(AssertionError, match="fixture broken catalog"):
+        module.verify_commit_and_nutrition_fixes(clone, allow_behavioral_fallback=True)
+
+
+def test_target_without_a_regular_package_cannot_borrow_an_installed_one(source_repo, tmp_path):
+    module = _load_cutover_module()
+    _commit_file(source_repo, "src/foodlogger/__init__.py", None)
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+    with pytest.raises(AssertionError, match="outside|Catalog contract run failed"):
+        module.verify_commit_and_nutrition_fixes(clone, allow_behavioral_fallback=True)
+
+
+def test_target_without_catalog_data_fails(source_repo, tmp_path):
+    module = _load_cutover_module()
+    _commit_file(source_repo, "src/foodlogger/data/usda_reference.json", None)
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+    with pytest.raises(AssertionError, match="Catalog contract run failed"):
+        module.verify_commit_and_nutrition_fixes(clone, allow_behavioral_fallback=True)
+
+
+def test_fallback_rejects_a_target_other_than_checked_out_head(source_repo, tmp_path):
     module = _load_cutover_module()
     clone = _shallow_clone(source_repo, tmp_path / "clone", depth=2)
     with pytest.raises(AssertionError, match="only exercise the checked-out HEAD"):
-        module.verify_commit_and_nutrition_fixes(clone, target_commit="HEAD~1")
+        module.verify_commit_and_nutrition_fixes(
+            clone, target_commit="HEAD~1", allow_behavioral_fallback=True
+        )
 
 
-def test_shallow_clone_rejects_modified_nutrition_code(source_repo, tmp_path):
+@pytest.mark.parametrize(
+    "shadow",
+    [
+        "src/foodlogger/nutrition_reference.py",  # modified tracked file
+        "src/foodlogger/nutrition_reference/__init__.py",  # untracked package wins over the module
+        "src/foodlogger/ignored_shadow.pyd",  # git-ignored extension module
+    ],
+)
+def test_fallback_rejects_modified_untracked_and_ignored_package_files(
+    source_repo, tmp_path, shadow
+):
     module = _load_cutover_module()
+    _commit_file(source_repo, ".gitignore", "*.pyd\n")
     clone = _shallow_clone(source_repo, tmp_path / "clone")
-    (clone / NUTRITION_FILE).write_text("locally changed\n", encoding="utf-8")
+    target = clone / shadow
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("# locally changed\n", encoding="utf-8")
     with pytest.raises(AssertionError, match="differs from HEAD"):
-        module.verify_commit_and_nutrition_fixes(clone)
+        module.verify_commit_and_nutrition_fixes(clone, allow_behavioral_fallback=True)
+
+
+def test_fallback_tolerates_bytecode_caches(source_repo, tmp_path):
+    module = _load_cutover_module()
+    _commit_file(source_repo, ".gitignore", "__pycache__/\n")
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+    cache = clone / "src/foodlogger/__pycache__/nutrition.cpython-312.pyc"
+    cache.parent.mkdir()
+    cache.write_bytes(b"")
+    report = module.verify_commit_and_nutrition_fixes(clone, allow_behavioral_fallback=True)
+    assert report["ancestry_unverifiable"] == list(module.REQUIRED_NUTRITION_COMMITS)
+
+
+def test_local_verification_rejects_a_root_other_than_the_imported_checkout(source_repo):
+    module = _load_cutover_module()
+    with pytest.raises(AssertionError, match="different checkout"):
+        module.run_local_verification(source_repo)
 
 
 def test_full_clone_without_the_commits_fails_without_behavior_fallback(source_repo, monkeypatch):
     module = _load_cutover_module()
 
-    def must_not_run(commits):
+    def must_not_run(root, commits):
         raise RuntimeError("catalog contracts must not replace ancestry in a full clone")
 
     monkeypatch.setattr(module, "verify_nutrition_fix_behavior", must_not_run)
     with pytest.raises(AssertionError, match="Missing required nutrition commits"):
-        module.verify_commit_and_nutrition_fixes(source_repo)
+        module.verify_commit_and_nutrition_fixes(source_repo, allow_behavioral_fallback=True)
 
 
 def test_full_clone_rejects_a_present_commit_that_is_not_an_ancestor(source_repo, monkeypatch):
     module = _load_cutover_module()
     _git(source_repo, "checkout", "-q", "-b", "side")
-    side_commit = _commit_nutrition_file(source_repo, "side\n")
+    side_commit = _commit_file(source_repo, "marker.txt", "side\n")
     _git(source_repo, "checkout", "-q", "-")
     monkeypatch.setattr(module, "REQUIRED_NUTRITION_COMMITS", (side_commit,))
     with pytest.raises(AssertionError, match="Missing required nutrition commits"):
@@ -646,3 +776,177 @@ def test_full_clone_reports_verified_ancestry(source_repo, monkeypatch):
     assert report["required_nutrition_commits"] == {ancestor: True}
     assert report["ancestry_unverifiable"] == []
     assert report["behavioral_contract"] == {}
+
+
+def test_deployed_commit_gate_rejects_a_shallow_checkout(source_repo, tmp_path):
+    module = _load_cutover_module()
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+    head = _git(clone, "rev-parse", "HEAD")
+    with pytest.raises(AssertionError, match="Unproven ancestry"):
+        module.verify_deployed_commit_sha({"commit": head}, head, root=clone)
+
+
+def test_deployed_commit_gate_rejects_a_commit_absent_from_the_checkout(source_repo):
+    module = _load_cutover_module()
+    absent = "ab" * 20
+    with pytest.raises(AssertionError, match="is not a commit in"):
+        module.verify_deployed_commit_sha({"commit": absent}, absent, root=source_repo)
+
+
+def test_hosted_smoke_rejects_unproven_ancestry_before_any_request(source_repo, tmp_path):
+    module = _load_cutover_module()
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+    client = _RecordingStagingClient()
+    with pytest.raises(AssertionError, match="Unproven ancestry"):
+        module.run_hosted_smoke(
+            STAGING_ORIGIN,
+            expected_commit=_git(clone, "rev-parse", "HEAD"),
+            client=client,
+            root=clone,
+        )
+    assert client.calls == []
+
+
+@pytest.mark.parametrize("expected_commit", ["", "   "])
+def test_hosted_smoke_requires_expected_commit_before_any_request(expected_commit):
+    module = _load_cutover_module()
+    client = _RecordingStagingClient()
+    with pytest.raises(ValueError, match="requires --expected-commit"):
+        module.run_hosted_smoke(STAGING_ORIGIN, expected_commit=expected_commit, client=client)
+    assert client.calls == []
+
+
+def test_smoke_against_a_hosted_client_requires_expected_commit():
+    module = _load_cutover_module()
+    client = _RecordingStagingClient()
+    with pytest.raises(ValueError, match="requires expected_commit"):
+        module.run_smoke_against_client(client)
+    assert client.calls == []
+
+
+@pytest.mark.parametrize("cli_expected", [False, True])
+def test_cli_hosted_smoke_rejects_a_shallow_checkout_before_opening_a_client(
+    source_repo, tmp_path, monkeypatch, cli_expected
+):
+    module = _load_cutover_module()
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+    monkeypatch.delenv("EXPECTED_COMMIT", raising=False)
+    monkeypatch.setattr(module, "ROOT", clone)
+
+    def no_client(*args, **kwargs):
+        raise RuntimeError("no HTTP client may open before ancestry is proven")
+
+    monkeypatch.setattr(module.httpx, "Client", no_client)
+    argv = ["--mode", "hosted-smoke"]
+    if cli_expected:
+        argv += ["--expected-commit", _git(clone, "rev-parse", "HEAD")]
+    with pytest.raises(AssertionError, match="Unproven ancestry"):
+        module.main(argv)
+
+
+@pytest.mark.parametrize("expected_commit", [None, ""])
+@pytest.mark.parametrize("resume", [False, True])
+def test_cutover_requires_expected_commit_before_any_connection(
+    connections, expected_commit, resume
+):
+    module = _load_cutover_module()
+    with pytest.raises(ValueError, match="requires --expected-commit"):
+        module.apply_postgres_cutover(
+            OWNER_DSN,
+            APP_DSN,
+            "apppass",
+            old_dsn=OLD_DSN,
+            resume_post_migration=resume,
+            expected_commit=expected_commit,
+            root=ROOT,
+        )
+    assert connections == []
+
+
+def test_cli_cutover_without_expected_commit_opens_no_connection(connections, monkeypatch):
+    module = _load_cutover_module()
+    monkeypatch.delenv("EXPECTED_COMMIT", raising=False)
+    with pytest.raises(ValueError, match="requires --expected-commit"):
+        module.main(
+            ["--mode", "cutover", "--admin-database-url", OWNER_DSN, "--app-database-url", APP_DSN]
+        )
+    assert connections == []
+
+
+@pytest.mark.parametrize("old_dsn", [None, OLD_DSN])
+def test_cutover_rejects_unproven_ancestry_before_any_connection(
+    source_repo, tmp_path, connections, old_dsn
+):
+    module = _load_cutover_module()
+    clone = _shallow_clone(source_repo, tmp_path / "clone")
+    with pytest.raises(AssertionError, match="Unproven ancestry"):
+        module.apply_postgres_cutover(
+            OWNER_DSN,
+            APP_DSN,
+            "apppass",
+            old_dsn=old_dsn,
+            expected_commit=_git(clone, "rev-parse", "HEAD"),
+            root=clone,
+        )
+    assert connections == []
+
+
+def test_cutover_rejects_a_proven_commit_that_is_not_checked_out(
+    source_repo, connections, monkeypatch
+):
+    module = _load_cutover_module()
+    ancestor = _git(source_repo, "rev-parse", "HEAD~1")
+    monkeypatch.setattr(module, "REQUIRED_NUTRITION_COMMITS", (ancestor,))
+    with pytest.raises(AssertionError, match="not the checked-out HEAD"):
+        module.apply_postgres_cutover(
+            OWNER_DSN, APP_DSN, "apppass", expected_commit=ancestor, root=source_repo
+        )
+    assert connections == []
+
+
+def test_cutover_with_proven_ancestry_reaches_the_owner_connection(
+    source_repo, connections, monkeypatch
+):
+    module = _load_cutover_module()
+    ancestor = _git(source_repo, "rev-parse", "HEAD~1")
+    monkeypatch.setattr(module, "REQUIRED_NUTRITION_COMMITS", (ancestor,))
+    monkeypatch.setattr(module, "verify_migration_manifest", lambda root: [])
+    with pytest.raises(_ConnectionReached):
+        module.apply_postgres_cutover(
+            OWNER_DSN,
+            APP_DSN,
+            "apppass",
+            expected_commit=_git(source_repo, "rev-parse", "HEAD"),
+            root=source_repo,
+        )
+    assert len(connections) == 1
+
+
+@pytest.mark.parametrize(
+    "extra,staging_url",
+    [([], None), (["--run-hosted-smoke"], "https://foodlogger-staging.onrender.com")],
+)
+def test_cli_cutover_runs_hosted_smoke_only_when_asked(monkeypatch, extra, staging_url):
+    module = _load_cutover_module()
+    received: dict = {}
+
+    def _capture(owner_dsn, app_dsn, app_password, **kwargs):
+        received.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(module, "apply_postgres_cutover", _capture)
+    module.main(
+        [
+            "--mode",
+            "cutover",
+            "--admin-database-url",
+            OWNER_DSN,
+            "--app-database-url",
+            APP_DSN,
+            "--expected-commit",
+            "4a9d6b6",
+            *extra,
+        ]
+    )
+    assert received["staging_url"] == staging_url
+    assert received["expected_commit"] == "4a9d6b6"

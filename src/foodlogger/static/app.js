@@ -45,7 +45,7 @@ function updateEstimate() {
     $("portion-estimate").textContent = `Enter a portion between 1 and 2,000 ${$("quantity-unit").textContent}.`;
     return;
   }
-  $("portion-estimate").textContent = `${format(food.calories * grams / 100)} kcal · ${format(food.protein * grams / 100)} g protein · ${format(food.carbs * grams / 100)} g carbs · ${format(food.fat * grams / 100)} g fat`;
+  $("portion-estimate").textContent = `${format(food.calories * grams / 100)} kcal, ${format(food.protein * grams / 100)} g protein, ${format(food.carbs * grams / 100)} g carbs, ${format(food.fat * grams / 100)} g fat`;
 }
 
 function selectFood(foodId) {
@@ -97,7 +97,7 @@ async function analyzePhoto(file) {
       button.type = "button";
       button.className = "candidate";
       button.dataset.foodId = candidate.food_id;
-      button.textContent = `${candidate.emoji} ${candidate.name} · ${format(candidate.score * 100)}%`;
+      button.textContent = `${candidate.name}, ${format(candidate.score * 100)}%`;
       button.title = "Model score; not a measured accuracy or calibrated probability";
       button.addEventListener("click", () => selectFood(candidate.food_id));
       $("candidates").append(button);
@@ -116,18 +116,19 @@ async function analyzePhoto(file) {
 function renderMeal(meal) {
   const row = document.createElement("article");
   row.className = "meal-entry";
-  const emoji = document.createElement("span");
-  emoji.className = "meal-emoji";
-  emoji.setAttribute("aria-hidden", "true");
-  emoji.textContent = meal.emoji;
   const details = document.createElement("div");
   details.className = "meal-main";
-  const title = document.createElement("h3");
+  const title = document.createElement("h4");
   title.textContent = meal.name;
   const subtitle = document.createElement("p");
-  subtitle.textContent = `${meal.meal_type} · ${format(meal.grams)} ${meal.details?.basis_unit || "g"}`;
+  subtitle.textContent = `${format(meal.grams)} ${meal.details?.basis_unit || "g"}`;
   const macros = document.createElement("small");
-  macros.textContent = `P ${format(meal.protein)} g · C ${format(meal.carbs)} g · F ${format(meal.fat)} g`;
+  macros.className = "meal-macros";
+  for (const [label, value] of [["Protein", meal.protein], ["Carbs", meal.carbs], ["Fat", meal.fat]]) {
+    const part = document.createElement("span");
+    part.textContent = `${label} ${format(value)} g`;
+    macros.append(part);
+  }
   details.append(title, subtitle, macros);
   if (meal.details?.nutrition_total) {
     const disclosure = document.createElement("details");
@@ -141,7 +142,7 @@ function renderMeal(meal) {
       const source = document.createElement("a");
       source.href = `https://world.openfoodfacts.org/product/${encodeURIComponent(meal.details.barcode)}`;
       source.target = "_blank"; source.rel = "noopener";
-      source.textContent = `Open Food Facts · ${meal.details.barcode}`;
+      source.textContent = `Open Food Facts: ${meal.details.barcode}`;
       disclosure.append(source);
     }
     if (Object.keys(meal.details.raw_nutriments || {}).length) {
@@ -173,8 +174,66 @@ function renderMeal(meal) {
       await loadJournal();
     } catch (error) { toast(error.message, true); remove.disabled = false; }
   });
-  row.append(emoji, details, energy, remove);
+  row.append(details, energy, remove);
   return row;
+}
+
+const MEAL_TYPES = [["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["snack", "Snack"]];
+function renderGroups(meals) {
+  return MEAL_TYPES.flatMap(([type, label]) => {
+    const items = meals.filter((meal) => meal.meal_type === type);
+    if (!items.length) return [];
+    const heading = document.createElement("h3");
+    heading.className = `meal-group-title ${type}`;
+    heading.textContent = label;
+    return [heading, ...items.map(renderMeal)];
+  });
+}
+
+// The day dial: the same geometry as BiteFlow. Midnight is at the top and time runs clockwise.
+const SVG_NS = "http://www.w3.org/2000/svg";
+const TYPICAL_MINUTES = { breakfast: 480, lunch: 780, snack: 960, dinner: 1170 };
+const dialPoint = (minutes, radius) => {
+  const angle = (minutes / 1440) * 2 * Math.PI - Math.PI / 2;
+  return { x: 150 + radius * Math.cos(angle), y: 150 + radius * Math.sin(angle) };
+};
+function svgElement(name, attributes) {
+  const element = document.createElementNS(SVG_NS, name);
+  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
+  return element;
+}
+function drawDialTicks() {
+  for (let hour = 0; hour < 24; hour += 1) {
+    const major = hour % 6 === 0;
+    const from = dialPoint(hour * 60, 111);
+    const to = dialPoint(hour * 60, major ? 121 : 115);
+    $("dial-ticks").append(svgElement("line", { class: major ? "dial-tick major" : "dial-tick", x1: from.x, y1: from.y, x2: to.x, y2: to.y }));
+    if (major) {
+      const label = dialPoint(hour * 60, 146);
+      const text = svgElement("text", { class: "dial-hour", x: label.x, y: label.y + 4 });
+      text.textContent = String(hour).padStart(2, "0");
+      $("dial-ticks").append(text);
+    }
+  }
+}
+function mealMinutes(meal) {
+  const logged = new Date(meal.created_at);
+  const sameDay = !Number.isNaN(logged.getTime()) && logged.getFullYear() === Number(meal.day.slice(0, 4)) && logged.getMonth() + 1 === Number(meal.day.slice(5, 7)) && logged.getDate() === Number(meal.day.slice(8, 10));
+  return sameDay ? logged.getHours() * 60 + logged.getMinutes() : TYPICAL_MINUTES[meal.meal_type];
+}
+function renderDay(meals, summary) {
+  const dots = meals.map((meal) => ({ type: meal.meal_type, minutes: mealMinutes(meal), radius: Math.max(7, Math.min(15, 5 + Math.sqrt(Math.max(0, meal.calories || 0)) / 1.6)) })).sort((a, b) => a.minutes - b.minutes);
+  // Meals logged minutes apart are nudged along the ring so that every dot stays visible.
+  for (let index = 1; index < dots.length; index += 1) dots[index].minutes = Math.max(dots[index].minutes, dots[index - 1].minutes + 42);
+  for (let index = dots.length - 1; index >= 0; index -= 1) dots[index].minutes = Math.min(dots[index].minutes, index === dots.length - 1 ? 1430 : dots[index + 1].minutes - 42);
+  $("dial-dots").replaceChildren(...dots.map((dot) => {
+    const point = dialPoint(dot.minutes, 124);
+    return svgElement("circle", { class: `dial-dot ${dot.type}`, cx: point.x, cy: point.y, r: dot.radius });
+  }));
+  // Share of logged energy at 4, 4 and 9 kcal per gram, the same split BiteFlow shows.
+  const energy = summary ? { protein: summary.protein * 4, carbs: summary.carbs * 4, fat: summary.fat * 9 } : { protein: 0, carbs: 0, fat: 0 };
+  const total = energy.protein + energy.carbs + energy.fat;
+  for (const key of ["protein", "carbs", "fat"]) $("share-" + key).style.setProperty("--share", total > 0 ? String(energy[key] / total) : "0");
 }
 
 async function loadJournal() {
@@ -182,7 +241,9 @@ async function loadJournal() {
   const day = $("journal-date").value;
   const version = ++state.journalVersion;
   if (!day || !$("journal-date").checkValidity()) {
+    $("journal-entries").removeAttribute("aria-busy");
     $("journal-entries").replaceChildren();
+    renderDay([], null);
     $("empty-journal").hidden = true;
     $("meal-count").textContent = "—";
     $("journal-day-label").textContent = "Select a date";
@@ -196,10 +257,12 @@ async function loadJournal() {
   $("journal-error").hidden = true;
   $("export-button").removeAttribute("aria-disabled");
   $("export-button").href = `/api/export?day=${encodeURIComponent(day)}`;
+  $("journal-entries").setAttribute("aria-busy", "true");
   try {
     const data = await request(`/api/meals?day=${encodeURIComponent(day)}`);
     if (version !== state.journalVersion) return;
-    $("journal-entries").replaceChildren(...data.meals.map(renderMeal));
+    $("journal-entries").replaceChildren(...renderGroups(data.meals));
+    renderDay(data.meals, data.summary);
     $("empty-journal").hidden = data.meals.length > 0;
     $("meal-count").textContent = data.summary.count;
     for (const key of ["calories", "protein", "carbs", "fat"]) $("total-" + key).textContent = format(data.summary[key]);
@@ -207,11 +270,14 @@ async function loadJournal() {
   } catch (error) {
     if (version !== state.journalVersion) return;
     $("journal-entries").replaceChildren();
+    renderDay([], null);
     $("empty-journal").hidden = true;
     $("meal-count").textContent = "—";
     for (const key of ["calories", "protein", "carbs", "fat"]) $("total-" + key).textContent = "—";
     $("journal-error").textContent = `Could not load this day. ${error.message}`;
     $("journal-error").hidden = false;
+  } finally {
+    if (version === state.journalVersion) $("journal-entries").removeAttribute("aria-busy");
   }
 }
 
@@ -265,7 +331,7 @@ async function initialize() {
       for (const food of data.foods.filter((item) => item.category === category)) {
         const option = document.createElement("option");
         option.value = food.id;
-        option.textContent = `${food.emoji} ${food.name}`;
+        option.textContent = food.name;
         group.append(option);
       }
       $("food-select").append(group);
@@ -306,7 +372,7 @@ function appendRawValues(list, values) {
 }
 function clearJournal() {
   ++state.journalVersion;
-  $("journal-entries").replaceChildren(); $("meal-count").textContent = "0";
+  $("journal-entries").replaceChildren(); $("journal-entries").removeAttribute("aria-busy"); renderDay([], null); $("meal-count").textContent = "0";
   for (const key of coreNutrients) $("total-" + key).textContent = "0";
   $("export-button").removeAttribute("href"); $("export-button").setAttribute("aria-disabled", "true");
   $("journal-error").hidden = true; $("empty-journal").hidden = false;
@@ -353,7 +419,7 @@ function fillProduct(product) {
   const link = document.createElement("a");
   link.href = `https://world.openfoodfacts.org/product/${encodeURIComponent(product.barcode)}`;
   link.target = "_blank"; link.rel = "noopener"; link.textContent = "Open Food Facts contributors";
-  $("product-source").replaceChildren(document.createTextNode(`Product ${product.barcode}${product.quantity ? ` · ${product.quantity}` : ""}. Source: `), link, document.createTextNode(" · ODbL. " + product.notes.join(" ")));
+  $("product-source").replaceChildren(document.createTextNode(`Product ${product.barcode}${product.quantity ? `, ${product.quantity}` : ""}. Source: `), link, document.createTextNode(", ODbL. " + product.notes.join(" ")));
   $("source-values").replaceChildren();
   appendRawValues($("source-values"), { ...product.raw_nutriments, ...product.nutriment_units });
   $("source-details").hidden = !$("source-values").children.length;
@@ -438,5 +504,6 @@ $("food-camera").addEventListener("change", (event) => analyzePhoto(event.target
 for (const id of ["barcode-camera", "barcode-photo"]) $(id).addEventListener("change", (event) => { if (event.target.files[0]) lookupProduct(event.target.files[0]); });
 $("barcode-form").addEventListener("submit", (event) => { event.preventDefault(); lookupProduct(); });
 $("basis-unit").addEventListener("change", () => { $("quantity-unit").textContent = $("basis-unit").value === "ml" ? "ml" : "grams"; updateEstimate(); });
+drawDialTicks();
 setAccount(null);
 initialize();

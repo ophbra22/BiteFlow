@@ -34,7 +34,11 @@
 - ZXing-C++: [source](https://github.com/zxing-cpp/zxing-cpp), Apache 2.0.
   Used for server-side barcode photo decoding.
 
-The interface uses system fonts, CSS shapes and system-rendered emoji. No stock
+- Fredoka: [Google Fonts](https://fonts.google.com/specimen/Fredoka), SIL Open Font License 1.1.
+  Latin and Hebrew subsets are served from `src/foodlogger/static/`; the license is in
+  [Fredoka-OFL.txt](../src/foodlogger/static/Fredoka-OFL.txt).
+
+The interface uses Fredoka, inline SVG and CSS shapes. No stock
 food photos are required by the application. The MIT license applies to this
 repository's original code, not third-party models, data or libraries.
 

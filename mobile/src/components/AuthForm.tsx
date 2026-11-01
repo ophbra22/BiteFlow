@@ -1,21 +1,33 @@
 import { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { colors, spacing } from '@/theme/tokens';
+import { useI18n } from '@/i18n/I18nProvider';
+import { colors, radius, spacing } from '@/theme/tokens';
 
 import { AppText } from './AppText';
 
+/** The brand mark: a meal orbiting the day. Its own geometry is never mirrored. */
+function OrbitMark() {
+  return (
+    <View style={styles.mark} accessibilityElementsHidden importantForAccessibility="no">
+      <View style={styles.ring}>
+        <View style={styles.core} />
+        <View style={[styles.dot, styles.dotA]} />
+        <View style={[styles.dot, styles.dotB]} />
+        <View style={[styles.dot, styles.dotC]} />
+      </View>
+    </View>
+  );
+}
+
 /** Shared top of the sign-in, register and recovery screens. */
 export function AuthIntro({ title, body }: { title: string; body?: string }) {
+  const { t } = useI18n();
   return (
     <View style={styles.intro}>
-      <View style={styles.mark} accessibilityElementsHidden importantForAccessibility="no">
-        <View style={styles.ring}>
-          <View style={styles.core} />
-          <View style={[styles.dot, styles.dotA]} />
-          <View style={[styles.dot, styles.dotB]} />
-          <View style={[styles.dot, styles.dotC]} />
-        </View>
+      <View style={styles.brand}>
+        <OrbitMark />
+        <AppText variant="heading">{t('common.appName')}</AppText>
       </View>
       <AppText variant="title" accessibilityRole="header">
         {title}
@@ -29,27 +41,43 @@ export function AuthIntro({ title, body }: { title: string; body?: string }) {
   );
 }
 
+/** "Or" between two ways of doing the same thing. */
+export function AuthDivider({ label }: { label: string }) {
+  return (
+    <View style={styles.divider}>
+      <View style={styles.rule} />
+      <AppText variant="caption" color={colors.muted} center style={styles.dividerLabel}>
+        {label}
+      </AppText>
+      <View style={styles.rule} />
+    </View>
+  );
+}
+
 export function FormStack({ children }: { children: ReactNode }) {
   return <View style={styles.form}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
   intro: { gap: spacing.sm, paddingTop: spacing.xl },
-  // Sits at the reading edge; its own geometry is never mirrored.
-  mark: { marginBottom: spacing.md, direction: 'ltr', alignSelf: 'flex-start' },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginBottom: spacing.xl },
+  mark: { direction: 'ltr', padding: spacing.xs },
   ring: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 9,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 6,
     borderColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  core: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.sage },
-  dot: { position: 'absolute', width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: colors.ground },
-  dotA: { backgroundColor: colors.butter, top: 6, right: -8 },
-  dotB: { backgroundColor: colors.rose, bottom: -10, left: 20 },
-  dotC: { backgroundColor: colors.lilac, top: 14, left: -11 },
+  core: { width: 18, height: 18, borderRadius: 9, backgroundColor: colors.sage },
+  dot: { position: 'absolute', width: 11, height: 11, borderRadius: radius.pill, borderWidth: 2, borderColor: colors.ground },
+  dotA: { backgroundColor: colors.butter, top: 2, right: -8 },
+  dotB: { backgroundColor: colors.rose, bottom: -8, left: 12 },
+  dotC: { backgroundColor: colors.lilac, top: 8, left: -9 },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  rule: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.line },
+  dividerLabel: { flexShrink: 1 },
   form: { gap: spacing.lg },
 });

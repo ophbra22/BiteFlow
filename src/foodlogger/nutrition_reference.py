@@ -15,40 +15,363 @@ from foodlogger.analysis_schemas import ReferenceFood
 from foodlogger.nutrition import NUTRIENTS
 
 ALIASES = {
+    # --- Israeli & Middle Eastern Staples ---
+    "חומוס גרגירים": "chickpeas",
+    "גרגירי חומוס": "chickpeas",
+    "גרגרי חומוס": "chickpeas",
+    "טחינה גולמית": "tahini",
+    "שניצל עוף": "chicken breaded fried",
+    "שניצלים": "chicken breaded fried",
+    "שניצל": "chicken breaded fried",
+    "פיתה כוסמין": "spelt pita bread",
+    "פיתה מלאה": "pita bread whole wheat",
+    "פיתה מחיטה מלאה": "pita bread whole wheat",
+    "פיתות": "pita bread",
+    "פיתה": "pita bread",
+    "חלות": "challah",
+    "חלה": "challah",
     "חומוס": "hummus",
     "פלאפל": "falafel",
-    "אורז": "rice cooked",
     "טחינה": "tahini",
-    "עוף": "chicken",
-    "שניצל": "chicken breaded fried",
     "קוסקוס": "couscous cooked",
+    "בורגול": "bulgur",
+    "טאבולה": "tabbouleh",
+    "חלבה": "halavah",
+    "בקלאווה": "baklava",
+    "בקلاווה": "baklava",
+    "מצות": "matzo",
+    "מצה": "matzo",
+    "צזיקי": "tzatziki",
+    "ציזיקי": "tzatziki",
     "שווארמה": "shawarma",
-    "סלט": "salad",
-    "תפוח אדמה": "potato",
-    "ביצה": "egg",
-    "ביצים": "eggs",
-    "חביתה": "egg omelet",
-    "חביתות": "egg omelet",
-    "ביצת עין": "egg fried",
-    "ביצי עין": "egg fried",
+    "שקשוקה": "shakshuka",
+    "סביח": "sabich",
+    "בורקס": "bourekas",
+    "מלאווח": "malawach",
+    "מלוואח": "malawach",
+    "ג׳חנון": "jachnun",
+    "ג'חנון": "jachnun",
+    "גחנון": "jachnun",
+    "קובה": "kubbeh",
+    "במבה": "bamba",
+    "פתיתים": "ptitim",
+    "לבנה": "labneh",
+    "קבב": "kebab",
+    "זעתר": "zaatar",
+    # --- Eggs & Omelets ---
     "ביצה מקושקשת": "egg scrambled",
     "ביצים מקושקשות": "egg scrambled",
     "ביצה קשה": "egg hard boiled",
     "ביצים קשות": "egg hard boiled",
+    "ביצה עלומה": "egg poached",
+    "ביצים עלומות": "egg poached",
+    "ביצת עין": "egg fried",
+    "ביצי עין": "egg fried",
+    "חביתות": "egg omelet",
+    "חביתה": "egg omelet",
+    "ביצים": "eggs",
+    "ביצה": "egg",
+    # --- Vegetables & Greens ---
+    "תפוחי אדמה": "potato",
+    "תפוח אדמה": "potato",
+    "שעועית ירוקה": "green beans",
+    "בצל ירוק": "scallion",
+    "פלפל אדום": "pepper sweet red",
+    "פלפל ירוק": "pepper sweet green",
+    "פלפל צהוב": "pepper sweet yellow",
+    "פלפל חריף": "pepper hot",
+    "עגבניות שרי": "tomatoes",
+    "עגבנייה": "tomato",
+    "עגבניה": "tomato",
+    "עגבניות": "tomatoes",
+    "מלפפון חמוץ": "pickle cucumber",
+    "מלפפונים חמוצים": "pickle cucumber",
+    "מלפפונים": "cucumber",
+    "מלפפון": "cucumber",
+    "גזרים": "carrots",
+    "גזר": "carrot",
+    "בצלים": "onions",
+    "בצל": "onion",
+    "שום": "garlic",
+    "חסה": "lettuce",
+    "גמבה": "pepper sweet red",
+    "פלפלים": "peppers",
+    "פלפל": "pepper",
+    "חצילים": "eggplant",
+    "חציל": "eggplant",
+    "קישואים": "zucchini",
+    "קישוא": "zucchini",
+    "זוקיני": "zucchini",
+    "כרוב אדום": "cabbage red",
+    "כרוב סגול": "cabbage red",
+    "כרוב": "cabbage",
+    "כרובית": "cauliflower",
+    "ברוקולי": "broccoli",
+    "תרד": "spinach",
+    "פטריות": "mushrooms",
+    "פטרייה": "mushroom",
+    "פטריה": "mushroom",
+    "אבוקדו": "avocado",
+    "זיתים": "olives",
+    "זית": "olive",
+    "תירס": "corn",
+    "בטטות": "sweet potato",
+    "בטטה": "sweet potato",
+    "סלק": "beet",
+    "אפונה ירוקה": "green peas",
+    "אפונה": "green peas",
+    "סלרי": "celery",
+    "צנונית": "radish",
+    "צנון": "radish",
+    "קולורבי": "kohlrabi",
+    "אספרגוס": "asparagus",
+    "ארטישוק": "artichoke",
+    "דלעת": "pumpkin",
+    "כרישה": "leeks",
+    "שומר": "fennel",
+    "במיה": "okra",
+    "פטרוזיליה": "parsley",
+    "כוסברה": "coriander",
+    "רוקט": "arugula",
+    "ארוגולה": "arugula",
+    # --- Fruits ---
+    "תפוחי עץ": "apples",
+    "תפוח עץ": "apple",
+    "תפוחים": "apples",
+    "תפוח": "apple",
+    "בננות": "bananas",
+    "בננה": "banana",
+    "תפוזים": "oranges",
+    "תפוז": "orange",
+    "אבטיח": "watermelon",
+    "מלון": "cantaloupe",
+    "ענבים": "grapes",
+    "תות שדה": "strawberries",
+    "תותים": "strawberries",
+    "תות": "strawberry",
+    "אוכמניות": "blueberries",
+    "פטל": "raspberries",
+    "אפרסקים": "peaches",
+    "אפרסק": "peach",
+    "נקטרינה": "nectarine",
+    "מנגו": "mango",
+    "אגסים": "pears",
+    "אגס": "pear",
+    "שזיפים": "plums",
+    "שזיף": "plum",
+    "משמשים": "apricots",
+    "משמש": "apricot",
+    "אננס": "pineapple",
+    "קיווי": "kiwi",
+    "רימון": "pomegranate",
+    "תאנים": "figs",
+    "תאנה": "fig",
+    "תמרים": "date",
+    "תמר": "date",
+    "דובדבנים": "cherries sweet",
+    "דובדבן": "cherries sweet",
+    "לימון": "lemon",
+    "ליים": "lime",
+    "אשכולית": "grapefruit",
+    "קלמנטינות": "clementine",
+    "קלמנטינה": "clementine",
+    "מנדרינה": "tangerine",
+    "אפרסמון": "persimmon",
+    "גויאבה": "guava",
+    "פפאיה": "papaya",
+    "צימוקים": "raisins",
+    # --- Poultry, Meat & Fish ---
+    "חזה עוף": "chicken breast",
+    "ירך עוף": "chicken thigh",
+    "פרגיות": "chicken thigh",
+    "פרגית": "chicken thigh",
+    "שוק עוף": "chicken drumstick",
+    "שוקיים עוף": "chicken drumstick",
+    "כנפי עוף": "chicken wing",
+    "כנפיים עוף": "chicken wing",
+    "חזה הודו": "turkey light meat",
+    "הודו": "turkey",
+    "עוף": "chicken",
+    "בשר טחון": "beef ground",
+    "בקר טחון": "beef ground",
+    "סטייק בקר": "beef steak",
+    "סטייק": "steak",
+    "בשר בקר": "beef",
+    "בקר": "beef",
+    "כבש": "lamb",
+    "טלה": "lamb",
+    "עגל": "veal",
+    "נקניקיות": "hot dog",
+    "נקניקייה": "hot dog",
+    "נקניקיה": "hot dog",
+    "פסטרמה": "pastrami",
+    "סלמי": "salami",
+    "טונה במים": "tuna canned water",
+    "טונה בשמן": "tuna canned oil",
+    "טונה": "tuna",
+    "סלמון": "salmon",
+    "אמנון": "tilapia",
+    "מושט": "tilapia",
+    "סרדינים": "sardines",
+    "סרדין": "sardines",
+    "בקלה": "cod",
+    "קוד": "cod",
+    "פורל": "trout",
+    "לברק": "sea bass",
+    "קרפיון": "carp",
+    "הליבוט": "halibut",
+    "שרימפס": "shrimp",
+    # --- Dairy, Cheese & Plant Proteins ---
+    "גבינת קוטג׳": "cottage cheese",
+    "גבינת קוטג'": "cottage cheese",
+    "גבינת קוטג": "cottage cheese",
+    "קוטג׳": "cottage cheese",
+    "קוטג'": "cottage cheese",
+    "קוטג": "cottage cheese",
+    "גבינה בולגרית": "feta cheese",
+    "בולגרית": "feta cheese",
+    "גבינת פטה": "feta cheese",
+    "פטה": "feta cheese",
+    "גבינה צהובה": "gouda cheese",
+    "גבינת צ'דר": "cheddar cheese",
+    "גבינת צ׳דר": "cheddar cheese",
+    "צ'דר": "cheddar cheese",
+    "צ׳דר": "cheddar cheese",
+    "גבינת מוצרלה": "mozzarella cheese",
+    "מוצרלה": "mozzarella cheese",
+    "גבינת ריקוטה": "ricotta cheese",
+    "ריקוטה": "ricotta cheese",
+    "גבינת פרמזן": "parmesan cheese",
+    "פרמזן": "parmesan cheese",
+    "פרמז'ן": "parmesan cheese",
+    "גבינת גאודה": "gouda cheese",
+    "גאודה": "gouda cheese",
+    "גבינת שמנת": "cream cheese",
+    "גבינת עיזים": "goat cheese",
+    "גבינה לבנה": "cottage cheese",
+    "גבינה": "cheese",
+    "יוגורט יווני": "yogurt greek",
+    "יוגורט": "yogurt",
+    "חלב": "milk",
+    "חמאה": "butter",
+    "שמנת חמוצה": "sour cream",
+    "גלידה": "ice cream",
+    "קפיר": "kefir",
+    "טופו": "tofu",
+    # --- Bread, Grains, Pasta & Legumes ---
+    "לחם חיטה מלאה": "bread whole wheat",
+    "לחם דגנים מלא": "bread whole wheat",
+    "לחם מלא": "bread whole wheat",
+    "לחם לבן": "bread white",
+    "לחם אחיד": "bread white",
+    "לחם שיפון": "bread rye",
+    "לחם": "bread",
     "לחמנייה": "bread roll",
     "לחמניה": "bread roll",
     "לחמניות": "bread roll",
-    "גבינה": "cheese",
+    "בייגל": "bagel",
+    "טורטיות": "tortilla",
+    "טורטייה": "tortilla",
+    "טורטיה": "tortilla",
+    "קרואסון": "croissant",
+    "אורז לבן": "white rice cooked",
+    "אורז מלא": "brown rice cooked",
+    "אורז בסמטי": "white rice cooked",
+    "אורז יסמין": "white rice cooked",
+    "אורז": "rice cooked",
+    "ספגטי": "pasta cooked",
+    "פסטה": "pasta cooked",
+    "מקרוני": "macaroni cooked",
+    "אטריות": "noodles cooked",
+    "נודלס": "noodles cooked",
+    "קינואה": "quinoa cooked",
+    "דייסת שיבולת שועל": "oatmeal",
+    "שיבולת שועל": "oatmeal",
+    "קוואקר": "oatmeal",
+    "כוסמת": "buckwheat",
+    "עדשים": "lentils",
+    "שעועית לבנה": "white beans",
+    "שעועית שחורה": "beans black",
+    "שעועית": "beans",
+    "פול": "fava beans",
+    "אדממה": "edamame",
+    "פנקייק": "pancakes",
+    "וופל בלגי": "waffle",
+    "פופקורן": "popcorn",
+    "בייגלה": "pretzels",
+    # --- Nuts, Seeds, Oils, Condiments & Beverages ---
+    "אגוזי מלך": "walnuts",
+    "אגוז מלך": "walnuts",
+    "אגוזי פקאן": "pecans",
+    "פקאן": "pecans",
+    "אגוזי קשיו": "cashews",
+    "קשיו": "cashews",
+    "אגוזי לוז": "hazelnuts",
+    "אגוזי מקדמיה": "macadamia",
+    "שקדים": "almonds",
+    "שקד": "almond",
+    "חמאת בוטנים": "peanut butter",
+    "בוטנים": "peanuts",
+    "פיסטוקים": "pistachio",
+    "פיסטוק": "pistachio",
+    "צנוברים": "pine nuts",
+    "גרעיני חמנייה": "sunflower seeds",
+    "גרעיני חמניה": "sunflower seeds",
+    "גרעיני דלעת": "pumpkin seeds",
+    "זרעי צ'יה": "chia seeds",
+    "זרעי צ׳יה": "chia seeds",
+    "צ'יה": "chia seeds",
+    "זרעי פשתן": "flaxseed",
+    "פשתן": "flaxseed",
+    "שמן זית": "olive oil",
+    "שמן קנולה": "canola oil",
+    "שמן קוקוס": "coconut oil",
+    "שמן שומשום": "sesame oil",
     "ושמן": "oil",
     "שמן": "oil",
-    "חמאה": "butter",
+    "מיונז": "mayonnaise",
+    "קטשופ": "ketchup",
+    "חרדל": "mustard",
+    "רוטב סויה": "soy sauce",
+    "חומץ": "vinegar",
+    "דבש": "honey",
+    "ריבה": "jam",
+    "סוכר": "sugar",
+    "סירופ מייפל": "syrup maple",
+    "שוקולד מריר": "chocolate dark",
+    "שוקולד": "chocolate",
+    "קפה שחור": "coffee turkish",
+    "קפה הפוך": "coffee latte",
+    "קפוצ'ינו": "coffee cappuccino",
+    "קפוצ׳ינו": "coffee cappuccino",
+    "אספרסו": "coffee espresso",
+    "נס קפה": "coffee brewed",
+    "קפה": "coffee brewed",
+    "תה ירוק": "tea hot leaf green",
+    "תה שחור": "tea hot leaf black",
+    "תה": "tea hot leaf black",
+    "מיץ תפוזים": "orange juice",
+    "מיץ תפוחים": "apple juice",
+    "יין אדום": "wine red",
+    "בירה": "beer",
+    "מרק עדשים": "soup lentil",
+    "מרק עוף": "soup chicken",
+    "מרק עגבניות": "soup tomato",
+    "סלט יווני": "greek salad",
+    "סלט קיסר": "caesar salad",
+    "קולסלאו": "coleslaw",
+    "סלט": "salad",
     "עם": "with",
+    # --- English Synonyms & Spelling Variants ---
     "schnitzel": "chicken breaded fried",
     "garbanzo": "chickpea",
     "aubergine": "eggplant",
     "courgette": "zucchini",
     "tahina": "tahini",
     "capsicum": "pepper",
+    "halva": "halavah",
+    "halvah": "halavah",
+    "matzah": "matzo",
 }
 STOP = {
     "and",
@@ -106,6 +429,20 @@ RECIPE_KINDS = {
     "congee",
     "burger",
     "glazed",
+    "cider",
+    "nectar",
+    "dip",
+    "syrup",
+    "casserole",
+    "souffle",
+    "stick",
+    "nugget",
+    "cornbread",
+    "kombucha",
+    "bubble",
+    "dog",
+    "pone",
+    "bran",
 }
 OTHER_MAIN_FOODS = {
     "chicken",
@@ -127,12 +464,25 @@ OTHER_MAIN_FOODS = {
     "vegetable",
     "tomato",
     "onion",
+    "corn",
 }
-IMPLICIT_RAW = {"almond", "walnut", "cashew", "pecan", "hazelnut", "pistachio"}
+IMPLICIT_RAW = {
+    "almond",
+    "walnut",
+    "cashew",
+    "pecan",
+    "hazelnut",
+    "pistachio",
+    "peanut",
+    "sunflower",
+    "pumpkin",
+    "seed",
+}
 CATEGORY_PREFIXES = {
     "nuts",
     "seeds",
     "mollusks",
+    "crustaceans",
     "spices",
     "snacks",
     "beverages",
@@ -141,6 +491,16 @@ CATEGORY_PREFIXES = {
     "cereals, ready-to-eat",
     "fast foods",
     "babyfood",
+    "fish",
+    "cheese",
+    "squash",
+    "soup",
+    "candies",
+    "crackers",
+    "oil",
+    "syrups",
+    "sugars",
+    "pickles",
 }
 EGG_VARIANTS = {
     "white",
@@ -172,26 +532,144 @@ COOKED = {
     "rotisserie",
 }
 
+_ALIAS_PATTERN = re.compile(
+    r"(?<!\w)(?:"
+    + "|".join(re.escape(w) for w in sorted(ALIASES, key=len, reverse=True))
+    + r")(?!\w)"
+)
+_IRREGULAR = {
+    "omelette": "omelet",
+    "omelettes": "omelet",
+    "potatoes": "potato",
+    "tomatoes": "tomato",
+    "berries": "berry",
+    "strawberries": "strawberry",
+    "blueberries": "blueberry",
+    "raspberries": "raspberry",
+    "blackberries": "blackberry",
+    "cherries": "cherry",
+    "peaches": "peach",
+    "radishes": "radish",
+}
+_QUALIFIER_WORDS = {
+    "babyfood",
+    "toddler",
+    "infant",
+    "dried",
+    "powder",
+    "dehydrated",
+    "canned",
+    "skin",
+    "battered",
+    "breaded",
+    "sweetened",
+    "imitation",
+    "substitute",
+    "vegan",
+    "glutinous",
+    "liver",
+    "turkey",
+    "sweet",
+    "solution",
+    "flavored",
+    "salted",
+    "multigrain",
+    "meatless",
+    "canadian",
+    "beef",
+    "bits",
+    "pickled",
+    "scalloped",
+    "creamed",
+    "candied",
+    "blossom",
+    "beverage",
+    "deli",
+    "prepackaged",
+    "restaurant",
+    "chinese",
+    "puerto",
+    "alaska",
+    "lomi",
+    "tartare",
+    "teriyaki",
+    "salisbury",
+    "kiev",
+    "curry",
+    "barbecue",
+    "bbq",
+    "stuffed",
+    "wasabi",
+    "wild",
+    "parboiled",
+    "zucchini",
+    "pumpkin",
+    "fruit",
+    "nut",
+    "almond",
+    "sesame",
+    "orange",
+    "soy",
+    "barley",
+    "oatmeal",
+    "black",
+    "wing",
+    "pepper",
+    "swiss",
+    "spanish",
+    "light",
+    "diet",
+    "reduced",
+    "nonfat",
+    "squash",
+    "raab",
+    "grain",
+    "navajo",
+    "ground",
+    "feet",
+    "neck",
+    "giblet",
+    "gizzard",
+    "heart",
+    "back",
+    "tail",
+    "thigh",
+    "drumstick",
+}
+_FISH_SPECIES = {
+    "salmon",
+    "tuna",
+    "tilapia",
+    "sardine",
+    "cod",
+    "halibut",
+    "trout",
+    "carp",
+    "bass",
+    "mackerel",
+    "herring",
+    "anchovy",
+}
+_CHEESE_KINDS = {
+    "feta",
+    "cheddar",
+    "mozzarella",
+    "ricotta",
+    "gouda",
+    "edam",
+    "parmesan",
+    "cottage",
+}
+
 
 def tokens(text):
     from foodlogger.food_providers import regional_query
 
-    text = regional_query(text)
+    text = re.sub(r"\s+", " ", regional_query(text)).strip()
     # Translate multiword foods before their component words (e.g. ביצה קשה).
-    for word in sorted(ALIASES, key=len, reverse=True):
-        replacement = ALIASES[word]
-        text = re.sub(r"(?<!\w)" + re.escape(word) + r"(?!\w)", replacement, text)
-    irregular = {
-        "omelette": "omelet",
-        "omelettes": "omelet",
-        "potatoes": "potato",
-        "tomatoes": "tomato",
-        "berries": "berry",
-        "strawberries": "strawberry",
-        "blueberries": "blueberry",
-    }
+    text = _ALIAS_PATTERN.sub(lambda m: ALIASES[m.group(0)], text)
     return {
-        irregular.get(word, word[:-1] if word.endswith("s") and len(word) > 3 else word)
+        _IRREGULAR.get(word, word[:-1] if word.endswith("s") and len(word) > 3 else word)
         for word in re.findall(r"[^\W_]+", text)
         if word not in STOP
     }
@@ -202,9 +680,14 @@ def rounded(value):
 
 
 def subject_tokens(name):
-    parts = name.lower().split(",")
+    parts = [p.strip() for p in name.lower().split(",")]
     # Some USDA headings classify the food before naming it.
-    subject = parts[1] if len(parts) > 1 and parts[0].strip() in CATEGORY_PREFIXES else parts[0]
+    if len(parts) > 2 and parts[0] == "squash" and parts[1] == "summer":
+        subject = parts[2]
+    elif len(parts) > 1 and parts[0] in CATEGORY_PREFIXES:
+        subject = parts[0] + " " + parts[1]
+    else:
+        subject = parts[0]
     return tokens(re.split(r"\bwith\b|\bas ingredient\b", subject)[0])
 
 
@@ -234,6 +717,11 @@ def aggregate(items: list[dict]) -> dict:
         )
         for k in NUTRIENTS
     }
+
+
+@lru_cache(maxsize=1)
+def _qualifier_sets():
+    return tuple((q, tokens(q)) for q in _QUALIFIER_WORDS)
 
 
 @lru_cache(maxsize=1)
@@ -275,6 +763,18 @@ class ReferenceCatalog:
             words.add("egg")
         if "pita" in words and "chip" not in words:
             words.add("bread")
+        if "challah" in words:
+            words.update({"bread", "egg"})
+        if "matzo" in words:
+            words.add("cracker")
+        if "tzatziki" in words:
+            words.add("dip")
+        if words == {"feta"}:
+            words.add("cheese")
+        if words in ({"peas"}, {"pea"}):
+            words.add("green")
+        if words == {"spaghetti"}:
+            words = {"pasta", "cooked"}
         if preparation == "unknown":
             preparation = next(
                 (
@@ -296,6 +796,11 @@ class ReferenceCatalog:
         identity = words - COOKED - {"raw"}
         if not identity or identity <= {"meat", "vegetable", "fruit", "mixed", "dish"}:
             return ()
+        allowed_main = set(words)
+        if words & _FISH_SPECIES:
+            allowed_main.add("fish")
+        if words & _CHEESE_KINDS:
+            allowed_main.add("cheese")
         # All identity terms must occur: better no result than matching tahini
         # sauce to undiluted paste, or chicken breast to chicken soup.
         results = []
@@ -305,7 +810,7 @@ class ReferenceCatalog:
             name = self.records[key].name.lower()
             if "ingredient" in record_words or not identity & self.subjects[key]:
                 continue
-            if "egg" in words:
+            if "egg" in words and "challah" not in words:
                 if (record_words & EGG_VARIANTS) - words:
                     continue
                 # Missing recipe detail is not evidence for a fat-free recipe.
@@ -324,13 +829,15 @@ class ReferenceCatalog:
                     continue
             if (record_words & RECIPE_KINDS) - words:
                 continue
-            if (record_words & OTHER_MAIN_FOODS) - words:
+            if (record_words & OTHER_MAIN_FOODS) - allowed_main:
                 continue
             if "rendered fat" in name and "fat" not in words:
                 continue
             if preparation == "raw" and "raw" not in record_words and not identity <= IMPLICIT_RAW:
                 continue
-            if preparation in COOKED and ("raw" in record_words or "uncooked" in record_words):
+            if preparation in COOKED and (
+                "raw" in record_words or "uncooked" in record_words or "unprepared" in record_words
+            ):
                 continue
             if (preparation == "raw" or "raw" in words) and record_words & COOKED:
                 continue
@@ -344,37 +851,78 @@ class ReferenceCatalog:
             if "egg" in words and preparation == "cooked" and not words & EGG_METHODS:
                 if "ns as to cooking method" in name:
                     score += 3
+            if (
+                "chicken" in words
+                and preparation in {"cooked", "grilled"}
+                and "ns as to cooking method" in name
+            ):
+                score += 2.5
+            if (
+                "chicken" in words
+                and "ns as to part" in name
+                and not (words & {"breast", "thigh", "drumstick", "wing"})
+            ):
+                score += 2.0
             if preparation == "raw" and "unroasted" in record_words:
                 score += 3
+            if (
+                preparation == "unknown"
+                and "raw" in record_words
+                and not (
+                    record_words & {"fish", "chicken", "beef", "pork", "turkey", "lamb", "veal"}
+                )
+            ):
+                score += 0.5
+            if "brewed" in record_words and "coffee" in words:
+                score += 1.5
+            if {"hot", "leaf", "black"} <= record_words and "tea" in words:
+                score += 1.5
+            if (
+                "bread" in words
+                and len(identity) == 1
+                and "white" in record_words
+                and len(record_words) == 2
+            ):
+                score += 1.5
+            if "steak" in words and "beef" in record_words and "nf" in record_words:
+                score += 2.0
+            if "walnut" in words and "excluding" in record_words:
+                score += 2.5
+            if "fried" in record_words and preparation != "fried" and "fried" not in words:
+                score -= 3.0
+            if (
+                "green" in record_words
+                and "green" not in words
+                and ("beet" in words or "cauliflower" in words)
+            ):
+                score -= 4.0
+            if "cauliflower" in record_words and "cauliflower" not in words:
+                score -= 4.0
+            if "broccoli" in record_words and "broccoli" not in words:
+                score -= 4.0
+            if "fat added" in name and "fat" not in words:
+                score -= 1.5
             score += 0.1 if preparation in COOKED and record_words & COOKED else 0
             # Avoid subtly different manufactured/baby/dried foods for generic meals.
-            for qualifier in {
-                "babyfood",
-                "infant",
-                "dried",
-                "powder",
-                "dehydrated",
-                "canned",
-                "skin",
-                "battered",
-                "breaded",
-                "sweetened",
-                "imitation",
-                "glutinous",
-                "liver",
-                "turkey",
-                "sweet",
-                "solution",
-                "flavored",
-                "salted",
-                "multigrain",
-                "meatless",
-                "canadian",
-                "beef",
-                "bits",
-                "pickled",
-            }:
-                if tokens(qualifier) & record_words and not tokens(qualifier) <= words:
+            for qualifier, q_tokens in _qualifier_sets():
+                if q_tokens & record_words and not q_tokens <= words:
+                    if qualifier == "black" and ("tea" in words or "coffee" in words):
+                        continue
+                    if qualifier == "light" and "turkey" in words:
+                        continue
+                    if qualifier == "zucchini" and "zucchini" in words:
+                        continue
+                    if qualifier == "squash" and "zucchini" in words:
+                        continue
+                    if qualifier == "canned" and ("sardine" in words or "tuna" in words):
+                        continue
+                    if qualifier == "ground" and "beef" in words:
+                        continue
+                    if qualifier == "skin" and (
+                        "ns as to cooking method" in name or "includes skin" in name
+                    ):
+                        score -= 0.5
+                        continue
                     score -= 4
             if "not specified" in name:
                 score -= 0.5

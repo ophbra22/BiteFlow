@@ -203,3 +203,23 @@ def test_barcode_photo_review_custom_nutrition_and_missing_product(browser_page)
     expect(page.locator("#journal-entries")).to_contain_text("250 ml")
     page.set_viewport_size({"width": 390, "height": 844})
     assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+
+
+def test_day_dial_follows_the_journal_and_every_width_fits(browser_page):
+    from playwright.sync_api import expect
+
+    page = browser_page
+    expect(page.locator("#dial-dots circle")).to_have_count(0)
+    page.locator("#food-select").select_option("banana")
+    page.locator("#meal-type").select_option("breakfast")
+    page.locator("#save-meal").click()
+    expect(page.locator("#dial-dots circle.breakfast")).to_have_count(1)
+    expect(page.locator(".meal-group-title.breakfast")).to_have_text("Breakfast")
+    assert page.locator("#share-carbs").evaluate(
+        "el => Number(el.style.getPropertyValue('--share'))"
+    ) > 0
+    for width, height in [(390, 844), (768, 1024), (1440, 900)]:
+        page.set_viewport_size({"width": width, "height": height})
+        assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
+    page.get_by_role("button", name="Delete Banana").click()
+    expect(page.locator("#dial-dots circle")).to_have_count(0)

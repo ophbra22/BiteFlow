@@ -3,90 +3,124 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f6f7f2">
+  <meta name="theme-color" content="#14251d">
+  <meta name="color-scheme" content="dark">
   <meta name="description" content="A little more insight into every bite. Your private food and nutrition journal.">
-  <title>FoodLogger — A little more insight into every bite</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23254139'/%3E%3Cpath d='M12 28V12h17v5H17v3h10v5H17v3z' fill='%23cbea9c'/%3E%3C/svg%3E">
+  <title>FoodLogger: a little more insight into every bite</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%2314251d'/%3E%3Ccircle cx='20' cy='20' r='12' fill='none' stroke='%231e3529' stroke-width='5'/%3E%3Ccircle cx='20' cy='20' r='6' fill='%23a3c29f'/%3E%3Ccircle cx='31' cy='12' r='3' fill='%23e8d48b'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-  <aside class="sidebar">
-    <a class="brand" href="/" aria-label="FoodLogger home"><span class="brand-icon">f<span>°</span></span>foodlogger<span class="brand-dot">.</span></a>
-    <p class="nav-label">YOUR DAILY PRACTICE</p>
-    <nav aria-label="Main navigation">
-      <a class="nav-item active" href="#overview"><span aria-hidden="true">◫</span> Overview <span class="nav-dot"></span></a>
-      <a class="nav-item" href="#journal"><span aria-hidden="true">▤</span> Food journal</a>
-      <a class="nav-item" href="#add-food"><span aria-hidden="true">⌕</span> Log a meal</a>
-      <a class="nav-item" href="/docs" target="_blank" rel="noopener"><span aria-hidden="true">⌘</span> Explore the API <span class="external"><svg class="arrow-svg" aria-hidden="true" viewBox="0 0 16 16"><path d="M3 13 13 3M3 3h10v10"/></svg></span></a>
-    </nav>
-    <div class="sidebar-note"><span class="leaf-mark" aria-hidden="true">✳</span><h3>Small steps.<br>Better understanding.</h3><p>Make room for a little more awareness, one meal at a time.</p></div>
-    <button class="about-trigger" id="about-button"><span class="info-icon">i</span> About this project <span><svg class="arrow-svg" aria-hidden="true" viewBox="0 0 16 16"><path d="M3 13 13 3M3 3h10v10"/></svg></span></button>
-    <div class="local-badge"><span></span> A private journal for every account</div>
-  </aside>
+  <header class="site-header">
+    <div class="container header-row">
+      <a class="brand" href="/" aria-label="FoodLogger home">
+        <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true"><circle class="brand-ring" cx="20" cy="20" r="14"/><circle class="brand-core" cx="20" cy="20" r="6.5"/><circle class="brand-dot-a" cx="31" cy="10" r="3.5"/><circle class="brand-dot-b" cx="17" cy="35" r="3.5"/><circle class="brand-dot-c" cx="6" cy="17" r="3.5"/></svg>
+        foodlogger
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a class="nav-item active" href="#overview" aria-current="location">Overview</a>
+        <a class="nav-item" href="#journal">Food journal</a>
+        <a class="nav-item" href="#add-food">Log a meal</a>
+        <a class="nav-item" href="/docs" target="_blank" rel="noopener">Explore the API</a>
+        <button class="nav-item about-trigger" id="about-button" type="button">About this project</button>
+      </nav>
+      <div class="profile"><button id="account-button" class="secondary-button" type="button">Sign in / Create account</button><button id="logout-button" class="text-button" type="button" hidden>Sign out</button></div>
+    </div>
+  </header>
 
-  <main id="main">
-    <header class="topbar"><div><span class="breadcrumb">MY WORKSPACE</span><span class="breadcrumb-divider">/</span><span>Overview</span></div><div class="profile"><button id="account-button" class="secondary-button">Sign in / Create account</button><button id="logout-button" hidden>Sign out</button></div></header>
-    <div class="content" id="overview"><div id="account-banner" class="account-banner"><strong>Your journal, wherever you are.</strong><p>Create a free account to save meals, scan products and return from another device.</p><button class="secondary-button" id="welcome-signin">Create account / Sign in</button></div>
-      <section class="page-heading"><div><p class="eyebrow">GOOD FOOD. A LITTLE MORE CLARITY.</p><h1>Your day, at a glance<span>.</span></h1><p class="subtitle">A simple space to understand what’s on your plate.</p></div><label class="date-picker"><span aria-hidden="true">▦</span><input id="journal-date" type="date" aria-label="Journal date" required></label></section>
+  <main id="main" class="container">
+    <div class="content" id="overview">
+      <div id="account-banner" class="account-banner"><div><strong>Your journal, wherever you are.</strong><p>Create a free account to save meals, scan products and return from another device. A private journal for every account.</p></div><button class="primary-button" id="welcome-signin" type="button">Create account / Sign in</button></div>
 
-      <section class="hero" aria-label="Welcome to FoodLogger">
-        <div class="hero-copy"><span class="hero-tag"><span></span> A MINDFUL MOMENT</span><h2>Every bite tells<br>a little story.</h2><p>Snap your food. Explore its nutrition.<br>Build a picture of your day.</p><a href="#add-food" class="hero-link">Let’s log something <span><svg class="arrow-svg" aria-hidden="true" viewBox="0 0 16 16"><path d="M3 13 13 3M3 3h10v10"/></svg></span></a></div>
-        <div class="food-art" aria-hidden="true"><div class="art-ring"></div><div class="plate"><div class="plate-inner"><span class="food avocado">🥑</span><span class="food tomato">🍅</span><span class="food leaf-one">🥬</span><span class="food broccoli">🥦</span><span class="food cucumber">🥒</span><span class="food lemon">🍋</span></div></div><span class="art-star star-one">✳</span><span class="art-star star-two">✦</span><div class="art-label"><span class="label-check">✓</span> A little more insight</div></div>
-        <span class="hero-index">01 / THE EVERYDAY JOURNAL</span>
+      <section class="page-heading">
+        <div>
+          <h1>Your day, at a glance</h1>
+          <p class="subtitle">Every bite tells a little story. Snap your food, explore its nutrition and build a picture of your day.</p>
+        </div>
+        <label class="date-picker"><span class="visually-hidden">Journal date</span><input id="journal-date" type="date" aria-label="Journal date" required></label>
       </section>
 
-      <section class="section-title"><h2>Your daily snapshot</h2><span>Estimated from your logged portions</span></section>
-      <section class="stats" aria-label="Daily nutrition totals" aria-live="polite">
-        <article class="stat-card calories"><div class="stat-label">Energy <span aria-hidden="true">↯</span></div><div class="stat-value"><span id="total-calories">0</span><small>kcal</small></div><p>Total logged energy</p><div class="stat-rule"></div></article>
-        <article class="stat-card protein"><div class="stat-label">Protein <span aria-hidden="true">◈</span></div><div class="stat-value"><span id="total-protein">0</span><small>g</small></div><p>From your food journal</p><div class="stat-rule"></div></article>
-        <article class="stat-card carbs"><div class="stat-label">Carbohydrates <span aria-hidden="true">✳</span></div><div class="stat-value"><span id="total-carbs">0</span><small>g</small></div><p>From your food journal</p><div class="stat-rule"></div></article>
-        <article class="stat-card fats"><div class="stat-label">Fats <span aria-hidden="true">◒</span></div><div class="stat-value"><span id="total-fat">0</span><small>g</small></div><p>From your food journal</p><div class="stat-rule"></div></article>
-      </section>
+      <div class="dashboard">
+        <div class="day-column">
+          <section class="panel day-panel" aria-label="Daily nutrition totals" aria-live="polite">
+            <div class="dial">
+              <svg id="day-dial" class="dial-svg" viewBox="-14 -14 328 328" role="img" aria-label="The day as a 24-hour dial. The meals are listed in your food journal.">
+                <circle class="dial-track" cx="150" cy="150" r="124"/>
+                <g id="dial-ticks"></g>
+                <g id="dial-dots"></g>
+              </svg>
+              <div class="dial-core">
+                <span class="dial-value"><span id="total-calories" class="num">0</span></span>
+                <span class="dial-unit">kcal</span>
+                <span class="dial-note">Total logged energy</span>
+              </div>
+            </div>
+            <div class="macros">
+              <h2 class="macros-title">Your daily snapshot</h2>
+              <p class="macros-note">Estimated from your logged portions</p>
+              <div class="macro"><span class="macro-name">Protein</span><span class="macro-value"><span id="total-protein" class="num">0</span> g</span><span class="meter meter-protein"><span id="share-protein"></span></span></div>
+              <div class="macro"><span class="macro-name">Carbohydrates</span><span class="macro-value"><span id="total-carbs" class="num">0</span> g</span><span class="meter meter-carbs"><span id="share-carbs"></span></span></div>
+              <div class="macro"><span class="macro-name">Fats</span><span class="macro-value"><span id="total-fat" class="num">0</span> g</span><span class="meter meter-fat"><span id="share-fat"></span></span></div>
+              <p class="macros-note">Bars show each macro’s share of logged energy.</p>
+            </div>
+          </section>
 
-      <div class="workspace-grid">
+          <section class="panel journal-panel" id="journal">
+            <div class="panel-heading">
+              <div class="journal-title"><h2>Your food journal</h2><span class="count-badge num" id="meal-count">0</span><span class="journal-day" id="journal-day-label">Today</span></div>
+              <a class="icon-button" id="export-button" href="/api/export" aria-label="Export selected day as CSV" title="Export CSV"><svg class="line-icon" aria-hidden="true" viewBox="0 0 16 16"><path d="M8 2v9m-4-4 4 4 4-4M3 12v2h10v-2"/></svg></a>
+            </div>
+            <div class="journal-error" id="journal-error" role="alert" hidden></div>
+            <div id="journal-entries"></div>
+            <div class="empty-state" id="empty-journal"><svg class="empty-icon line-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg><h3>A fresh page for your day.</h3><p>Your meals will find a home here. Add your first one to start the picture.</p><a class="secondary-button" href="#add-food">Log your first meal</a></div>
+          </section>
+        </div>
+
         <section class="panel add-panel" id="add-food">
-          <div class="panel-heading"><div><span class="eyebrow">A FRESH ENTRY</span><h2>What’s on your plate?</h2></div><span class="step-badge">01 → 02</span></div>
+          <div class="panel-heading"><h2>What’s on your plate?</h2></div>
           <p class="panel-description">Take a photo, scan a product or enter its nutrition label.</p>
           <div class="entry-tabs" aria-label="Entry method"><button type="button" data-mode="photo" aria-pressed="true">Photo / Catalog</button><button type="button" data-mode="barcode" aria-pressed="false">Barcode</button><button type="button" data-mode="manual" aria-pressed="false">Enter values</button></div>
-          <div id="photo-section"><label class="capture-button">Take a food photo<input id="food-camera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label>
-          <div id="drop-zone" class="drop-zone">
-            <input type="file" id="food-photo" accept="image/jpeg,image/png,image/webp" aria-label="Upload a food photo">
-            <div id="upload-prompt"><span class="upload-icon" aria-hidden="true"><svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="5" width="18" height="15" rx="3"/><path d="m8 5 1-2h6l1 2"/><circle cx="12" cy="12.5" r="3.5"/></svg></span><strong>Drop a food photo here</strong><p>or <span>browse files</span></p><small>JPG, PNG or WebP · up to 8 MiB</small></div>
-            <div id="image-preview" hidden><img id="preview-image" alt="Your selected food"><span>Choose another photo <svg class="arrow-svg" aria-hidden="true" viewBox="0 0 16 16"><path d="M3 13 13 3M3 3h10v10"/></svg></span></div>
+
+          <div id="photo-section">
+            <label class="capture-button">Take a food photo<input id="food-camera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label>
+            <div id="drop-zone" class="drop-zone">
+              <input type="file" id="food-photo" accept="image/jpeg,image/png,image/webp" aria-label="Upload a food photo">
+              <div id="upload-prompt"><svg class="upload-icon line-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="3"/><path d="m8 5 1-2h6l1 2"/><circle cx="12" cy="12.5" r="3.5"/></svg><strong>Drop a food photo here</strong><p>or <span class="link-text">browse files</span></p><small>JPG, PNG or WebP, up to 8 MiB</small></div>
+              <div id="image-preview" hidden><img id="preview-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="480" height="240" alt="Your selected food"><span>Choose another photo</span></div>
+            </div>
+            <div class="prediction-message" id="prediction-message" role="status" aria-live="polite" hidden></div>
+            <div id="candidates" class="candidates" aria-label="Food suggestions"></div>
           </div>
-          <div class="prediction-message" id="prediction-message" role="status" aria-live="polite" hidden></div>
-          <div id="candidates" class="candidates" aria-label="Food suggestions"></div>
+
+          <div id="barcode-section" hidden>
+            <p class="panel-description">Photograph the full barcode in good light, keeping the lines sharp.</p>
+            <div class="capture-row"><label class="capture-button">Take barcode photo<input id="barcode-camera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label><label class="capture-button">Upload barcode<input id="barcode-photo" type="file" accept="image/jpeg,image/png,image/webp"></label></div>
+            <form id="barcode-form"><label class="field-label" for="barcode-number">Or enter the barcode digits</label><div class="lookup-row"><input id="barcode-number" inputmode="numeric" pattern="[0-9]{8,14}" minlength="8" maxlength="14" required autocomplete="off"><button class="secondary-button" id="lookup-button">Find product</button></div></form>
+            <p id="barcode-status" class="prediction-message" role="status" hidden></p>
           </div>
-          <div id="barcode-section" hidden><p class="panel-description">Photograph the full barcode in good light, keeping the lines sharp.</p><div class="capture-row"><label class="capture-button">Take barcode photo<input id="barcode-camera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label><label class="capture-button">Upload barcode<input id="barcode-photo" type="file" accept="image/jpeg,image/png,image/webp"></label></div><form id="barcode-form"><label class="field-label" for="barcode-number">Or enter the barcode digits</label><div class="lookup-row"><input id="barcode-number" inputmode="numeric" pattern="[0-9]{8,14}" minlength="8" maxlength="14" required autocomplete="off"><button class="secondary-button" id="lookup-button">Find product</button></div></form><p id="barcode-status" class="prediction-message" role="status" hidden></p></div>
-          <div class="or-divider"><span></span> YOUR PORTION <span></span></div>
+
+          <h3 class="form-divider">Your portion</h3>
           <form id="meal-form">
             <div id="catalog-fields"><label class="field-label" for="food-select">Food <span>Confirm or choose manually</span></label>
             <select id="food-select" required><option value="">Choose a food…</option></select></div>
             <div id="custom-fields" hidden><label class="field-label" for="product-name">Food / product name</label><input id="product-name" maxlength="120" required><label class="field-label" for="product-brand">Brand (optional)</label><input id="product-brand" maxlength="120"><label class="field-label" for="basis-unit">Nutrition values per</label><select id="basis-unit"><option value="g">100 grams</option><option value="ml">100 millilitres</option></select><p class="panel-description">Check against the label. Energy, protein, carbohydrates and fat are required. Missing values stay blank.</p><div class="nutrient-grid" id="nutrient-fields"></div><p id="product-source" class="source-note"></p><details id="source-details" hidden><summary>All values supplied by the product database</summary><p class="fine-print">Original database values and units; check the product label before using them.</p><dl id="source-values" class="nutrition-list"></dl></details></div>
             <div class="form-row"><div><label class="field-label" for="grams">Portion size</label><div class="input-unit"><input id="grams" type="number" min="1" max="2000" step="0.1" value="100" required inputmode="decimal"><span id="quantity-unit">grams</span></div></div><div><label class="field-label" for="meal-type">Meal</label><select id="meal-type"><option value="breakfast">Breakfast</option><option value="lunch" selected>Lunch</option><option value="dinner">Dinner</option><option value="snack">Snack</option></select></div></div>
             <div class="portion-estimate" id="portion-estimate">Choose a food to see your portion estimate.</div>
-            <button class="primary-button" id="save-meal" type="submit"><span>＋</span> Add to food journal <span><svg class="arrow-svg" aria-hidden="true" viewBox="0 0 16 16"><path d="M3 13 13 3M3 3h10v10"/></svg></span></button>
+            <button class="primary-button" id="save-meal" type="submit">Add to food journal</button>
             <p class="fine-print">Confirm the food and portion before saving. Catalog values are illustrative estimates; product labels and entered values can differ.</p>
           </form>
         </section>
-
-        <section class="panel journal-panel" id="journal">
-          <div class="panel-heading"><div><span class="eyebrow">ONE MEAL AT A TIME</span><h2>Your food journal <span class="count-badge" id="meal-count">0</span></h2></div><a class="icon-button" id="export-button" href="/api/export" aria-label="Export selected day as CSV" title="Export CSV"><svg class="arrow-svg" aria-hidden="true" viewBox="0 0 16 16"><path d="M8 2v9m-4-4 4 4 4-4M3 12v2h10v-2"/></svg></a></div>
-          <div class="journal-tabs"><span class="selected">All meals</span><span id="journal-day-label">Today</span></div>
-          <div class="journal-error" id="journal-error" role="alert" hidden></div>
-          <div id="journal-entries"></div>
-          <div class="empty-state" id="empty-journal"><div class="empty-icon" aria-hidden="true">♧</div><h3>A fresh page for your day.</h3><p>Your meals will find a home here.<br>Add your first one to start the picture.</p><a href="#add-food">Log your first meal <span><svg class="arrow-svg" aria-hidden="true" viewBox="0 0 16 16"><path d="M3 13 13 3M3 3h10v10"/></svg></span></a></div>
-          <div class="journal-footer"><span class="tiny-spark">✳</span><p>Awareness starts with a small, everyday habit.</p></div>
-        </section>
       </div>
-      <footer class="footer"><span>foodlogger<span class="brand-dot">.</span> <span class="footer-divider">/</span> A little more insight into every bite.</span><button id="model-info-button">How recognition works <span><svg class="arrow-svg" aria-hidden="true" viewBox="0 0 16 16"><path d="M3 13 13 3M3 3h10v10"/></svg></span></button></footer>
+
+      <footer class="footer"><span>foodlogger: a little more insight into every bite.</span><button id="model-info-button" class="text-button" type="button">How recognition works</button></footer>
     </div>
   </main>
+  <a href="#add-food" class="log-shortcut hero-link">Let’s log something</a>
   <div class="toast" id="toast" role="status" hidden></div>
-  <dialog id="about-dialog"><button id="close-dialog" class="dialog-close" aria-label="Close project information">×</button><p class="eyebrow">BEHIND THE JOURNAL</p><h2>Small app. Real machine learning.</h2><p>FoodLogger is a food-recognition and nutrition journal built with Python, FastAPI, TensorFlow and SQLite.</p><div class="about-block"><h3>Recognition, with room for uncertainty</h3><p>The default model is MobileNetV2 trained on ImageNet, with 23 food classes linked to this catalog. It suggests one main food at a time. Scores are model outputs, not measured accuracy. Other foods, mixed dishes and recipes may be misidentified.</p></div><div class="about-block"><h3>Your portion makes the difference</h3><p>A photo cannot tell us the weight. You select the food and enter grams; the app scales an illustrative per-100g nutrition entry. These illustrative estimates vary with ingredients and preparation and should not guide dietary decisions.</p></div><div class="about-block"><h3>Your account and photos</h3><p>Your journal is stored on our server and is accessible through your account. Photos are processed in memory on the server and are not saved. Barcode numbers are sent to Open Food Facts to retrieve product information; your photos and account details are not shared with that service. Save your recovery code: it is the only way to reset a forgotten password.</p><h3>Product data</h3><p>Product information comes from Open Food Facts contributors under the Open Database License. Coverage and completeness vary. Review the label, especially serving size and grams versus millilitres.</p></div><a href="/docs" target="_blank" rel="noopener" class="hero-link">Browse the API <span><svg class="arrow-svg" aria-hidden="true" viewBox="0 0 16 16"><path d="M3 13 13 3M3 3h10v10"/></svg></span></a></dialog>
-<dialog id="auth-dialog"><button id="close-auth" class="dialog-close" aria-label="Close sign in">×</button><p class="eyebrow">YOUR PRIVATE JOURNAL</p><h2 id="auth-title">Welcome back.</h2><div class="entry-tabs" id="auth-tabs"><button type="button" data-auth="login" aria-pressed="true">Sign in</button><button type="button" data-auth="register" aria-pressed="false">Create account</button><button type="button" data-auth="recover" aria-pressed="false">Recover</button></div><form id="auth-form"><label class="field-label" for="username">Username</label><input id="username" autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_-]{3,32}" required><p class="fine-print">3–32 letters, numbers, underscores or hyphens.</p><div id="recovery-field" hidden><label class="field-label" for="recovery-code">Saved recovery code</label><input id="recovery-code" autocomplete="off" minlength="20" maxlength="128"></div><label class="field-label" for="password" id="password-label">Password</label><input id="password" type="password" autocomplete="current-password" minlength="12" maxlength="128" required><p class="fine-print">At least 12 characters. Use a unique password.</p><p id="auth-error" class="journal-error" role="alert" hidden></p><button class="primary-button" id="auth-submit">Sign in</button></form></dialog>
-  <dialog id="recovery-dialog"><p class="eyebrow">KEEP THIS SOMEWHERE SAFE</p><h2>Your recovery code.</h2><p>Save this code in your password manager. It is shown only now and lets you reset your password. Anyone with this code and your username can access your journal.</p><p>Username: <strong id="recovery-username"></strong></p><code id="saved-recovery"></code><button id="download-recovery" class="secondary-button">Download recovery code</button><button id="close-recovery" class="primary-button">I have saved my code</button></dialog>
+  <dialog id="about-dialog"><button id="close-dialog" class="dialog-close" aria-label="Close project information">×</button><h2>Small app. Real machine learning.</h2><p>FoodLogger is a food-recognition and nutrition journal built with Python, FastAPI, TensorFlow and SQLite.</p><div class="about-block"><h3>Recognition, with room for uncertainty</h3><p>The default model is MobileNetV2 trained on ImageNet, with 23 food classes linked to this catalog. It suggests one main food at a time. Scores are model outputs, not measured accuracy. Other foods, mixed dishes and recipes may be misidentified.</p></div><div class="about-block"><h3>Your portion makes the difference</h3><p>A photo cannot tell us the weight. You select the food and enter grams; the app scales an illustrative per-100g nutrition entry. These illustrative estimates vary with ingredients and preparation and should not guide dietary decisions.</p></div><div class="about-block"><h3>Your account and photos</h3><p>Your journal is stored on our server and is accessible through your account. Photos are processed in memory on the server and are not saved. Barcode numbers are sent to Open Food Facts to retrieve product information; your photos and account details are not shared with that service. Save your recovery code: it is the only way to reset a forgotten password.</p><h3>Product data</h3><p>Product information comes from Open Food Facts contributors under the Open Database License. Coverage and completeness vary. Review the label, especially serving size and grams versus millilitres.</p></div><a href="/docs" target="_blank" rel="noopener" class="secondary-button">Browse the API</a></dialog>
+  <dialog id="auth-dialog"><button id="close-auth" class="dialog-close" aria-label="Close sign in">×</button><h2 id="auth-title">Welcome back.</h2><div class="entry-tabs" id="auth-tabs"><button type="button" data-auth="login" aria-pressed="true">Sign in</button><button type="button" data-auth="register" aria-pressed="false">Create account</button><button type="button" data-auth="recover" aria-pressed="false">Recover</button></div><form id="auth-form"><label class="field-label" for="username">Username</label><input id="username" autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_\-]{3,32}" required><p class="fine-print">3 to 32 letters, numbers, underscores or hyphens.</p><div id="recovery-field" hidden><label class="field-label" for="recovery-code">Saved recovery code</label><input id="recovery-code" autocomplete="off" minlength="20" maxlength="128"></div><label class="field-label" for="password" id="password-label">Password</label><input id="password" type="password" autocomplete="current-password" minlength="12" maxlength="128" required><p class="fine-print">At least 12 characters. Use a unique password.</p><p id="auth-error" class="journal-error" role="alert" hidden></p><button class="primary-button" id="auth-submit">Sign in</button></form></dialog>
+  <dialog id="recovery-dialog"><h2>Your recovery code.</h2><p>Save this code in your password manager. It is shown only now and lets you reset your password. Anyone with this code and your username can access your journal.</p><p>Username: <strong id="recovery-username"></strong></p><code id="saved-recovery"></code><button id="download-recovery" class="secondary-button" type="button">Download recovery code</button><button id="close-recovery" class="primary-button" type="button">I have saved my code</button></dialog>
 </body>
 </html>

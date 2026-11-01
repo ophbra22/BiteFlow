@@ -401,6 +401,7 @@ export const en = {
       'This build was made without a server address. Set EXPO_PUBLIC_API_URL and build again.',
   },
   errors: {
+    serverWaking: 'The server may be waking up. Please wait while we reconnect.',
     network: 'The server could not be reached. Check your connection and try again.',
     timeout: 'The server took too long to answer. Try again.',
     rateLimited: 'Too many requests. Wait a moment and try again.',

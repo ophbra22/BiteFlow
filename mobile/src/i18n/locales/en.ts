@@ -406,6 +406,7 @@ export const en = {
     notConfiguredBody:
       'This build was made without a server address. Set EXPO_PUBLIC_API_URL and build again.',
   },
+  crash: { title: 'Something went wrong', body: 'This screen could not open. Try again to reload it.', retry: 'Try again' },
   errors: {
     network: 'The server could not be reached. Check your connection and try again.',
     timeout: 'The server took too long to answer. Try again.',

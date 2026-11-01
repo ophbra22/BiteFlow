@@ -22,6 +22,9 @@ import { ensureDirection } from '@/i18n/direction';
 import type { Language } from '@/i18n/translate';
 import { colors } from '@/theme/tokens';
 
+// Expo Router owns the root React error boundary and retry lifecycle.
+export { ErrorBoundary } from '@/components/ErrorBoundary';
+
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {

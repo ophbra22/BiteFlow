@@ -9,7 +9,9 @@ NUTRIENTS = ("calories", "protein", "carbs", "fat")
 
 class Catalog:
     def __init__(self):
-        data = json.loads(files("foodlogger").joinpath("data/foods.json").read_text())
+        data = json.loads(
+            files("foodlogger").joinpath("data/foods.json").read_text(encoding="utf-8")
+        )
         self.source = data["source"]
         self.reference = data["reference"]
         self.foods = {food["id"]: food for food in data["foods"]}

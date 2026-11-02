@@ -40,12 +40,13 @@ def test_supabase_poolers_use_bundled_production_roots(host):
         "supabase.com.attacker.example",
     ],
 )
-def test_supabase_trust_is_not_used_for_other_hosts(host):
+def test_supabase_trust_is_not_used_for_other_hosts(host, system_ca_bundle):
     pytest.importorskip("psycopg")
     from foodlogger.database import Database
 
     options = Database(f"postgresql://app:fixture-only@{host}/postgres").connection_options
-    assert options["sslrootcert"] == ssl.get_default_verify_paths().cafile
+    assert options["sslrootcert"] == str(system_ca_bundle)
+    assert options["sslmode"] == "verify-full"
 
 
 def test_supabase_explicit_ca_override_is_preserved():

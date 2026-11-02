@@ -1,8 +1,10 @@
 """Stage 0 regressions for render.yaml, 16-migration cutover, and staging smoke safety gates."""
 
 import importlib.util
+import os
 import py_compile
 import shutil
+import ssl
 import subprocess
 import sys
 from pathlib import Path
@@ -542,10 +544,16 @@ def test_staging_identity_matches_the_release_readiness_record():
     record = (ROOT / "docs/biteflow/release-readiness/testflight-rc12-15.md").read_text(
         encoding="utf-8"
     )
+    # Empty tuples would pass both loops without checking anything.
+    assert module.EXPIRING_STAGING_DB_IDS
+    assert module.UNVERIFIED_STAGING_DB_IDS
+    assert module.APPROVED_STAGING_HOSTS
     for db_id in module.EXPIRING_STAGING_DB_IDS:
         assert db_id in record
     for db_id in module.UNVERIFIED_STAGING_DB_IDS:
         assert db_id not in record
+    for host in module.APPROVED_STAGING_HOSTS:
+        assert host in record
     assert module.DEFAULT_STAGING_ORIGIN in record
     assert module.validate_staging_origin(module.DEFAULT_STAGING_ORIGIN)
 
@@ -687,6 +695,54 @@ class _RecordingStagingClient:
     def post(self, path, **kwargs):
         self.calls.append(f"POST {path}")
         raise AssertionError(f"Unexpected POST {path}")
+
+
+@pytest.fixture
+def no_system_ca(monkeypatch):
+    """Report a CA file only through SSL_CERT_FILE, as Python does on Windows."""
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    paths = ssl.get_default_verify_paths()
+    monkeypatch.setattr(
+        ssl,
+        "get_default_verify_paths",
+        lambda: paths._replace(cafile=os.environ.get("SSL_CERT_FILE")),
+    )
+
+
+def test_ca_fallback_keeps_verify_full_and_does_not_leak(no_system_ca):
+    module = _load_cutover_module()
+    contract = module.verify_tls_and_role_contract()
+    assert contract["sslmode"] == "verify-full"
+    assert contract["trusted_ca_count"] > 0
+    assert "SSL_CERT_FILE" not in os.environ
+
+    parsed = module._parse_postgres_dsn(APP_DSN, "app_database_url")
+    assert parsed["connection_options"]["sslmode"] == "verify-full"
+    assert parsed["connection_options"]["sslrootcert"]
+    assert "SSL_CERT_FILE" not in os.environ
+
+    module.validate_cutover_database_urls(OWNER_DSN, APP_DSN)
+    assert "SSL_CERT_FILE" not in os.environ
+
+
+def test_ca_fallback_is_restored_when_a_cutover_fails(no_system_ca, connections, monkeypatch):
+    module = _load_cutover_module()
+    monkeypatch.setattr(module, "require_proven_ancestry", lambda *args, **kwargs: "fixture")
+    with pytest.raises(_ConnectionReached):
+        module.apply_postgres_cutover(
+            OWNER_DSN, APP_DSN, "apppass", expected_commit="4a9d6b6", root=ROOT
+        )
+    assert connections[0]["sslmode"] == "verify-full"
+    assert "SSL_CERT_FILE" not in os.environ
+
+
+def test_ca_fallback_never_replaces_an_operator_setting(no_system_ca, tmp_path, monkeypatch):
+    module = _load_cutover_module()
+    operator_bundle = tmp_path / "operator-ca.pem"
+    monkeypatch.setenv("SSL_CERT_FILE", str(operator_bundle))
+    parsed = module._parse_postgres_dsn(APP_DSN, "app_database_url")
+    assert parsed["connection_options"]["sslrootcert"] == str(operator_bundle)
+    assert os.environ["SSL_CERT_FILE"] == str(operator_bundle)
 
 
 def test_nutrition_contracts_cover_every_required_commit():

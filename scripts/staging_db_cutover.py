@@ -19,6 +19,7 @@ import ssl
 import subprocess
 import sys
 import tempfile
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
@@ -247,6 +248,25 @@ WHERE pid = pg_backend_pid()
 """.strip()
 
 
+@contextmanager
+def _certifi_when_no_system_ca():
+    """Where Python reports no CA file, use certifi only for the wrapped call.
+
+    This resolves the trust bundle for Database and leaves sslmode=verify-full in place. It
+    never replaces an operator's SSL_CERT_FILE, and leaves the process environment as it was.
+    """
+    if ssl.get_default_verify_paths().cafile or "SSL_CERT_FILE" in os.environ:
+        yield
+        return
+    import certifi
+
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+    try:
+        yield
+    finally:
+        os.environ.pop("SSL_CERT_FILE", None)
+
+
 def validate_staging_origin(
     origin: str,
     *,
@@ -293,6 +313,7 @@ ALLOWED_CONNINFO_KEYS: frozenset[str] = frozenset(
 )
 
 
+@_certifi_when_no_system_ca()
 def _parse_postgres_dsn(dsn: str, label: str) -> dict:
     if not dsn or not isinstance(dsn, str):
         raise ValueError(f"{label} must be a non-empty PostgreSQL URL")
@@ -322,11 +343,6 @@ def _parse_postgres_dsn(dsn: str, label: str) -> dict:
         raise ValueError(f"{label} must include both hostname and database name")
     if not username:
         raise ValueError(f"{label} must specify a username")
-
-    if not ssl.get_default_verify_paths().cafile:
-        import certifi
-
-        os.environ.setdefault("SSL_CERT_FILE", certifi.where())
 
     from psycopg.conninfo import conninfo_to_dict
 
@@ -633,11 +649,8 @@ def apply_migrations_to_sqlite(db_path: Path, root: Path = ROOT) -> dict:
     }
 
 
+@_certifi_when_no_system_ca()
 def verify_tls_and_role_contract(sample_dsn: str | None = None) -> dict:
-    if not ssl.get_default_verify_paths().cafile:
-        import certifi
-
-        os.environ.setdefault("SSL_CERT_FILE", certifi.where())
     dsn = sample_dsn or (
         "postgresql://foodlogger_app:fixture-only@"
         "dpg-staging-probe.frankfurt-postgres.render.com/biteflow_staging_db"
@@ -1230,6 +1243,7 @@ def run_local_verification(root: Path = ROOT) -> dict:
     }
 
 
+@_certifi_when_no_system_ca()
 def apply_postgres_cutover(
     owner_dsn: str,
     app_dsn: str,
@@ -1391,6 +1405,7 @@ def apply_postgres_cutover(
     }
 
 
+@_certifi_when_no_system_ca()
 def run_postgres_verify(app_dsn: str) -> dict:
     """Run read-only PostgreSQL TLS, role, non-owner, and 36-table RLS verification on app_dsn."""
     import psycopg

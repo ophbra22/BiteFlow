@@ -15,7 +15,9 @@ def test_sqlite_connection_keeps_transactions_and_foreign_keys(tmp_path):
         assert db.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
 
-def test_database_url_is_not_a_file_and_never_appears_in_repr(tmp_path, monkeypatch):
+def test_database_url_is_not_a_file_and_never_appears_in_repr(
+    tmp_path, monkeypatch, system_ca_bundle
+):
     pytest.importorskip("psycopg")
     from foodlogger.database import Database
 
@@ -27,7 +29,7 @@ def test_database_url_is_not_a_file_and_never_appears_in_repr(tmp_path, monkeypa
     assert not list(tmp_path.iterdir())
 
 
-def test_remote_database_requires_verified_tls():
+def test_remote_database_requires_verified_tls(system_ca_bundle):
     pytest.importorskip("psycopg")
     from foodlogger.database import Database
 
@@ -37,9 +39,7 @@ def test_remote_database_requires_verified_tls():
         Database("postgresql://user:SECRET@example.com/postgres?sslmode=require")
     database = Database("postgresql://user:SECRET@example.com/postgres")
     assert database.connection_options["sslmode"] == "verify-full"
-    import ssl
-
-    assert database.connection_options["sslrootcert"] == ssl.get_default_verify_paths().cafile
+    assert database.connection_options["sslrootcert"] == str(system_ca_bundle)
 
 
 def test_invalid_database_url_is_rejected_without_echoing_it():
@@ -144,7 +144,9 @@ def test_missing_system_ca_fails_with_setup_message(monkeypatch):
         ("unspecified SECRET failure", "database_error"),
     ],
 )
-def test_database_failure_logs_only_safe_reason(monkeypatch, caplog, message, expected):
+def test_database_failure_logs_only_safe_reason(
+    monkeypatch, caplog, message, expected, system_ca_bundle
+):
     psycopg = pytest.importorskip("psycopg")
     from foodlogger.database import Database, DatabaseUnavailable
 

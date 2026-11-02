@@ -548,3 +548,130 @@ def test_baseline_mode_needs_no_provider_or_permission(workspace, monkeypatch):
     report = json.loads((workspace / "manifest-baseline-report.json").read_text())
     assert report["summary"]["tp"] == 1
     assert report["live_provider_calls"] == 0
+
+
+def test_v2_baseline_scores_items_without_legacy_labels(workspace, monkeypatch):
+    class PerfectClassifier:
+        def __init__(self, _catalog):
+            pass
+
+        def predict(self, _image):
+            return {"status": "recognized", "candidates": [{"name": "apple"}]}
+
+    path = write_manifest(workspace, 1)
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    del manifest["cases"][0]["visible_food_labels"]
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(evaluation, "Classifier", PerfectClassifier)
+    monkeypatch.setattr(evaluation, "Catalog", object)
+    evaluation.main(["--mode", "baseline", "--manifest", str(path)])
+    report = json.loads((workspace / "manifest-baseline-report.json").read_text())
+    assert report["results"][0]["detection"] == {"tp": 1, "fp": 0, "fn": 0}
+    assert report["summary"]["end_to_end_recall"] == 1
+    assert report["summary"]["f1"] == 1
+    assert report["summary"]["item_grams_mae"] is None
+    assert report["summary"]["status_accuracy"] is None
+
+
+@pytest.mark.parametrize("different", ["provider", "endpoint", "revision"])
+def test_cache_never_replays_a_different_backend(workspace, different):
+    cache = workspace / "cache"
+    options = evaluation.AnalysisOptions()
+    original = FakeProvider(meal("apple"))
+    original.base_url = "http://127.0.0.1:11434"
+    original.model_revision = "revision-1"
+    evaluation.EvaluationProvider(original, cache).recognize([b"synthetic"], options)
+    other = FakeProvider()
+    other.base_url = original.base_url
+    other.model_revision = original.model_revision
+    if different == "provider":
+        other.name = "ollama-local"
+    elif different == "endpoint":
+        other.base_url = "http://127.0.0.1:11435"
+    else:
+        other.model_revision = "revision-2"
+    wrapper = evaluation.EvaluationProvider(other, cache, cache_only=True)
+    with pytest.raises(VisionUnavailable):
+        wrapper.recognize([b"synthetic"], options)
+    assert other.calls == []
+    assert wrapper.cache_hits == 0
+
+
+def test_cache_rejects_mismatched_stored_provenance(workspace):
+    cache = workspace / "cache"
+    options = evaluation.AnalysisOptions()
+    evaluation.EvaluationProvider(FakeProvider(meal()), cache).recognize([b"synthetic"], options)
+    path = next(cache.glob("*.json"))
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    stored["provenance"] = {"provider": "ollama-local"}
+    path.write_text(json.dumps(stored), encoding="utf-8")
+    provider = FakeProvider()
+    wrapper = evaluation.EvaluationProvider(provider, cache, cache_only=True)
+    with pytest.raises(VisionUnavailable, match="provenance"):
+        wrapper.recognize([b"synthetic"], options)
+    assert provider.calls == []
+    assert wrapper.cache_hits == 0
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"reference_total_source": "published_dataset", "reference_total": {"calorie_typo": 42}},
+        {"reference_total_source": "published_dataset", "reference_total": {"calories": "42"}},
+        {"reference_total_source": "published_dataset", "reference_total": {"calories": True}},
+        {"reference_total_source": "published_dataset", "reference_total": {"calories": -1}},
+        {
+            "reference_total_source": "published_dataset",
+            "reference_total": {"calories": float("nan")},
+        },
+        {
+            "reference_total_source": "published_dataset",
+            "reference_total": {"calories": float("inf")},
+        },
+        {"reference_total_source": "published_dataset", "reference_total": []},
+        {"expected_items": [None]},
+        {"expected_items": [{"name": ["apple"]}]},
+        {"expected_items": [{"name": "apple", "aliases": "fruit"}]},
+        {"expected_items": [{"name": "apple", "aliases": [None]}]},
+        {"expected_items": [{"name": "apple", "usda_reference_id": []}]},
+        {"expected_items": [{"name": "apple", "scaled_nutrients": {"calories": "42"}}]},
+        {"expected_items": [{"name": "apple", "scaled_nutrients": {"calorie_typo": 42}}]},
+        {"expected_items": [{"name": "apple", "grams": float("inf")}]},
+        {"expected_items": [{"name": "apple", "usda_reference_name": []}]},
+        {"id": []},
+        {"file": []},
+    ],
+)
+def test_invalid_annotations_are_rejected_before_any_provider_call(workspace, monkeypatch, fields):
+    path = write_manifest(workspace, 1)
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["cases"][0].update(fields)
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    provider = FakeProvider(meal())
+    with pytest.raises(SystemExit) as refused:
+        run(monkeypatch, provider, path, "--allow-live-api")
+    assert refused.value.code == 2
+    assert provider.calls == []
+
+
+def test_usda_total_mass_must_agree_with_item_mass():
+    manifest = load_fixture()
+    manifest["cases"][0]["reference_total"]["grams"] = 999999
+    assert any(
+        "grams" in error for error in evaluation.validate_manifest_v2(manifest, ReferenceCatalog())
+    )
+
+
+def test_inconsistent_usda_mass_is_rejected_before_provider_configuration(workspace, monkeypatch):
+    manifest = load_fixture()
+    manifest["cases"][0]["reference_total"]["grams"] = 999999
+    path = workspace / "bad-mass.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    def refuse_configuration():
+        raise AssertionError("An inconsistent manifest must fail before configuring a provider.")
+
+    monkeypatch.setattr(evaluation, "configured_vision", refuse_configuration)
+    with pytest.raises(SystemExit) as refused:
+        evaluation.main(["--mode", "vision", "--manifest", str(path), "--allow-live-api"])
+    assert refused.value.code == 2

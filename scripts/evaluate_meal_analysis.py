@@ -333,27 +333,71 @@ def _same_nutrients(left, right):
     )
 
 
+def _nonempty_string(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _finite_nonnegative(value):
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, int | float)
+        and math.isfinite(value)
+        and value >= 0
+    )
+
+
+def _validate_nutrients(value, allowed, label, errors):
+    if not isinstance(value, dict):
+        errors.append(f"{label}: must be a nutrient object or null")
+        return False
+    valid = True
+    for key, number in value.items():
+        if key not in allowed:
+            errors.append(f"{label}: unknown key {key}")
+            valid = False
+        if number is not None and not _finite_nonnegative(number):
+            errors.append(f"{label}/{key}: must be a finite nonnegative number or null")
+            valid = False
+    return valid
+
+
 def _validate_items(case, references, errors):
     """Ground truth must come from canonical USDA records or the published dataset."""
     label = case.get("id", "?")
     usda_totals = case.get("reference_total_source", "usda_reference") == "usda_reference"
     gravimetric = case.get("ground_truth_tier") == "gravimetric"
     for item in case["expected_items"]:
+        if not isinstance(item, dict):
+            errors.append(f"{label}: expected item must be an object")
+            continue
         name = item.get("name")
-        if not name:
+        if not _nonempty_string(name):
             errors.append(f"{label}: expected item without a name")
+            continue
+        aliases = item.get("aliases", [])
+        if not isinstance(aliases, list) or not all(_nonempty_string(a) for a in aliases):
+            errors.append(f"{label}/{name}: aliases must be a list of nonempty strings")
             continue
         grams = item.get("grams")
         if grams is None:
             if gravimetric:
                 errors.append(f"{label}/{name}: gravimetric item needs grams")
-        elif (
-            isinstance(grams, bool) or not isinstance(grams, int | float) or not 1 <= grams <= 2000
-        ):
+        elif not _finite_nonnegative(grams) or not 1 <= grams <= 2000:
             errors.append(f"{label}/{name}: grams must be 1-2000 or null")
             continue
         reference_id = item.get("usda_reference_id")
         scaled = item.get("scaled_nutrients")
+        if scaled is not None and not _validate_nutrients(
+            scaled, NUTRIENT_KEYS, f"{label}/{name}/scaled_nutrients", errors
+        ):
+            continue
+        if reference_id is not None and not _nonempty_string(reference_id):
+            errors.append(f"{label}/{name}: usda_reference_id must be a nonempty string or null")
+            continue
+        stated_name = item.get("usda_reference_name")
+        if stated_name is not None and not _nonempty_string(stated_name):
+            errors.append(f"{label}/{name}: usda_reference_name must be a nonempty string or null")
+            continue
         if reference_id is None:
             if scaled and usda_totals:
                 errors.append(f"{label}/{name}: scaled_nutrients without a USDA reference")
@@ -362,7 +406,6 @@ def _validate_items(case, references, errors):
             errors.append(f"{label}/{name}: unknown reference {reference_id}")
             continue
         record = references.get(reference_id)
-        stated_name = item.get("usda_reference_name")
         if stated_name is not None and stated_name != record.name:
             errors.append(f"{label}/{name}: usda_reference_name is not {record.name!r}")
         if scaled and usda_totals:
@@ -374,17 +417,25 @@ def _validate_items(case, references, errors):
 
 def _validate_total(case, errors):
     total = case.get("reference_total")
-    if total is None or case.get("reference_total_source", "usda_reference") != "usda_reference":
+    if total is None:
         return
     label = case.get("id", "?")
+    if not _validate_nutrients(
+        total, {*NUTRIENT_KEYS, "grams"}, f"{label}/reference_total", errors
+    ):
+        return
+    if case.get("reference_total_source", "usda_reference") != "usda_reference":
+        return
     items = case["expected_items"]
+    if total.get("grams") is not None:
+        if not items or any(item.get("grams") is None for item in items):
+            errors.append(f"{label}: reference_total grams needs grams on every item")
+        elif not math.isclose(total["grams"], sum(item["grams"] for item in items), abs_tol=1e-6):
+            errors.append(f"{label}: reference_total grams is not the sum of item grams")
     if not items or any(not item.get("scaled_nutrients") for item in items):
         errors.append(f"{label}: reference_total needs scaled_nutrients on every item")
     elif not _same_nutrients(total, aggregate([item["scaled_nutrients"] for item in items])):
         errors.append(f"{label}: reference_total is not the sum of scaled_nutrients")
-    extra = set(total) - {*NUTRIENT_KEYS, "grams"}
-    if extra:
-        errors.append(f"{label}: unknown reference_total keys {sorted(extra)}")
 
 
 def validate_manifest_v2(manifest, references):
@@ -393,26 +444,37 @@ def validate_manifest_v2(manifest, references):
     cases = manifest.get("cases")
     if not isinstance(cases, list) or not cases:
         return ["manifest needs a nonempty cases list"]
-    ids = [case.get("id") for case in cases]
-    if len(set(ids)) != len(ids):
-        errors.append("case ids must be unique")
+    ids = set()
     for case in cases:
-        label = case.get("id", "?")
-        file = str(case.get("file", ""))
-        if not file or Path(file).anchor or ".." in Path(file).parts:
+        if not isinstance(case, dict):
+            errors.append("each case must be an object")
+            continue
+        label = case.get("id")
+        if not _nonempty_string(label):
+            errors.append("case id must be a nonempty string")
+        elif label in ids:
+            errors.append("case ids must be unique")
+        else:
+            ids.add(label)
+        file = case.get("file")
+        if not _nonempty_string(file) or Path(file).anchor or ".." in Path(file).parts:
             errors.append(f"{label}: file must be a relative path inside the manifest directory")
         if not re.fullmatch(r"[0-9a-f]{64}", str(case.get("sha256", ""))):
             errors.append(f"{label}: sha256 must be 64 lowercase hex characters")
-        if case.get("license") not in PERMITTED_LICENSES:
+        if not isinstance(case.get("license"), str) or case["license"] not in PERMITTED_LICENSES:
             errors.append(f"{label}: license must be one of {sorted(PERMITTED_LICENSES)}")
-        if not case.get("source_url"):
+        if not _nonempty_string(case.get("source_url")):
             errors.append(f"{label}: source_url is required")
         status = case.get("expected_status")
-        if status not in STATUSES:
+        if not isinstance(status, str) or status not in STATUSES:
             errors.append(f"{label}: expected_status must be one of {sorted(STATUSES)}")
-        if case.get("ground_truth_tier") not in TIERS:
+        if (
+            not isinstance(case.get("ground_truth_tier"), str)
+            or case["ground_truth_tier"] not in TIERS
+        ):
             errors.append(f"{label}: ground_truth_tier must be one of {sorted(TIERS)}")
-        if case.get("reference_total_source", "usda_reference") not in TOTAL_SOURCES:
+        source = case.get("reference_total_source", "usda_reference")
+        if not isinstance(source, str) or source not in TOTAL_SOURCES:
             errors.append(f"{label}: reference_total_source must be one of {sorted(TOTAL_SOURCES)}")
         items = case.get("expected_items")
         if not isinstance(items, list):
@@ -422,8 +484,10 @@ def validate_manifest_v2(manifest, references):
             errors.append(f"{label}: a no_food case cannot have items or a reference_total")
         if status == "food" and not items:
             errors.append(f"{label}: a food case needs expected_items")
+        before_items = len(errors)
         _validate_items(case, references, errors)
-        _validate_total(case, errors)
+        if len(errors) == before_items:
+            _validate_total(case, errors)
     return errors
 
 
@@ -438,6 +502,18 @@ class EvaluationProvider:
         self.provider = provider
         self.name = provider.name
         self.model = provider.model
+        endpoint = getattr(provider, "base_url", None)
+        if endpoint is None and self.name == "gemini-free":
+            endpoint = "https://generativelanguage.googleapis.com/v1beta"
+        self.provenance = {
+            "cache_version": 2,
+            "provider": self.name,
+            "implementation": f"{type(provider).__module__}.{type(provider).__qualname__}",
+            "model": self.model,
+            "model_revision": getattr(provider, "model_revision", None),
+            # Endpoints can contain credentials; store a digest, never the URL.
+            "endpoint_sha256": hashlib.sha256(str(endpoint).encode()).hexdigest(),
+        }
         self.cache_dir = Path(cache_dir) if cache_dir else None
         self.cache_only = cache_only
         self.live_calls = 0
@@ -449,6 +525,7 @@ class EvaluationProvider:
     def _path(self, images, options):
         fingerprint = hashlib.sha256()
         for part in (
+            json.dumps(self.provenance, sort_keys=True),
             hashlib.sha256(PROMPT.encode()).hexdigest(),
             self.model,
             options.model_dump_json(),
@@ -461,8 +538,13 @@ class EvaluationProvider:
         path = self._path(images, options) if self.cache_dir else None
         if path and path.exists():
             stored = json.loads(path.read_text(encoding="utf-8"))
+            if stored.get("provenance") != self.provenance:
+                raise VisionUnavailable(
+                    "Stored observation provenance does not match this provider."
+                )
+            observation = VisionMeal.model_validate(stored["observation"])
             self.cache_hits += 1
-            return VisionMeal.model_validate(stored["observation"]), stored["usage"]
+            return observation, stored["usage"]
         if self.cache_only:
             raise VisionUnavailable("No stored observation for this image in --cache-only mode.")
         self.live_calls += 1
@@ -470,7 +552,13 @@ class EvaluationProvider:
         if path:
             temporary = path.with_suffix(".tmp")
             temporary.write_text(
-                json.dumps({"observation": observation.model_dump(), "usage": usage}),
+                json.dumps(
+                    {
+                        "provenance": self.provenance,
+                        "observation": observation.model_dump(),
+                        "usage": usage,
+                    }
+                ),
                 encoding="utf-8",
             )
             temporary.replace(path)
@@ -509,7 +597,8 @@ def _limitations(manifest, default_manifest, cache_hits, truncated):
         "counts failed/blocked images as missed expected components.",
         "Item gram, nutrient and USDA reference metrics cover matched items only; "
         "missed components count against recall instead.",
-        "Baseline provides at most one accepted item and no weight estimate.",
+        "Baseline provides at most one accepted item and no weight estimate. Its classifier "
+        "statuses do not map to vision food/no_food/uncertain; status metrics remain null.",
         "Zero paid API calls; electricity and hardware costs are not measured.",
         *manifest.get("coverage_gaps", []),
     ]
@@ -605,7 +694,14 @@ def main(argv=None):
                 )
                 row.update(predicted=predicted, absolute_error={})
                 # Baseline has no automatic portion or nutrient estimate.
-                if case.get("visible_food_labels") is not None:
+                if case.get("expected_items") is not None:
+                    pairs = match_items(case["expected_items"], [{"name": p} for p in predicted])
+                    row["detection"] = {
+                        "tp": len(pairs),
+                        "fp": len(predicted) - len(pairs),
+                        "fn": len(case["expected_items"]) - len(pairs),
+                    }
+                elif case.get("visible_food_labels") is not None:
                     row["detection"] = detection(case["visible_food_labels"], predicted)
             else:
                 language = "he" if str(case.get("locale", "")).startswith("he") else "en"
@@ -656,6 +752,7 @@ def main(argv=None):
         "evaluated_at": datetime.now(UTC).isoformat(),
         "provider": getattr(getattr(engine, "provider", None), "name", None),
         "model": getattr(getattr(engine, "provider", None), "model", None),
+        "provider_provenance": provider.provenance if provider else None,
         "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
         "manifest_schema_version": manifest.get("schema_version", 1),
         "synthetic": manifest.get("synthetic") is True,

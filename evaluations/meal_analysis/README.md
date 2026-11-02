@@ -120,6 +120,9 @@ added, and each stays `null` when it has no evidence:
   and returning one is `false_reference`. An absent key leaves the item unannotated.
 - Item metrics cover matched items only. Missed components count against recall.
 - Errors can come from recognition, portion or retrieval. This does not separate them.
+- Baseline mode scores v2 `expected_items` using the same aliases as vision, without
+  requiring legacy `visible_food_labels`. Its classifier statuses do not map to the
+  vision status vocabulary, so status metrics remain `null`, as do portion metrics.
 
 ### Manifest v2
 
@@ -129,6 +132,8 @@ validator requires a license of `CC0-1.0` or `CC-BY-4.0`, a relative `file`, a k
 status and tier, and recomputes `scaled_nutrients` and `reference_total` from
 `usda_reference.json`. Measured totals from a dataset declare
 `"reference_total_source": "published_dataset"` and skip that recomputation.
+Both sources still validate field shapes and finite nonnegative numbers (or `null`).
+USDA total grams, when provided, must equal the sum of annotated item grams.
 `"synthetic": true` labels the report and its first limitation.
 
 Items are matched by whole-phrase `name` and `aliases` against `search_name` and the
@@ -159,9 +164,16 @@ and `--cache-only`. These change an existing command:
    With `--manifest`, the default report is `<manifest stem>-<mode>-report.json` beside it.
 
 `--cache-dir` is opt-in, because a replay is not a new measurement. It stores the
-provider's observation, keyed by prompt, model, options and prepared image, and
+provider's observation, keyed by provider/backend implementation, endpoint digest,
+model/revision, prompt, options and prepared image, and
 grounding reruns on replay. `--cache-only` re-scores a retrieval change with no
 provider and no `--allow-live-api`. Reports count replays, and a miss is a failed case.
+Cache files store this provider provenance and validate it before replay; old files
+without provenance are not reused. `provider_provenance` in reports records the
+identity used. Endpoint URLs are hashed to avoid recording embedded credentials.
+`model_revision: null` means the provider exposes only a model name, not a pinned
+revision; cache replay remains a historical observation, not a new result from a
+potentially updated model behind that name.
 `live_provider_calls` counts calls to `recognize()`, including failed calls; a
 provider's internal HTTP retries can make additional attempts against quota.
 

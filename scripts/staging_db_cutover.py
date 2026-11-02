@@ -190,8 +190,8 @@ print(json.dumps({"results": results, "used": used}))
 """
 STAGING_PROJECT_ID = "gen-lang-client-0101662511"
 DEFAULT_STAGING_ORIGIN = "https://biteflow-staging-api.onrender.com"
-# Recorded in docs/biteflow/release-readiness/testflight-rc12-15.md. Whether this is still the
-# active staging database must be confirmed on Render (runbook Step 2.0).
+# Recorded in docs/biteflow/release-readiness/testflight-rc12-15.md and shown on the Render
+# dashboard. That the staging DATABASE_URL points to it is not proven (runbook Step 2.0).
 EXPIRING_STAGING_DB_IDS: tuple[str, ...] = ("dpg-dbbhudvavr4c73duk09g-a",)
 # No repository evidence ties this ID to staging or to an expiry date. It is never accepted as
 # the old database, and is refused as a replacement target in case it is in use.
@@ -200,6 +200,7 @@ APPROVED_STAGING_HOSTS: tuple[str, ...] = ("biteflow-staging-api.onrender.com",)
 # Refused everywhere. srv-d6q76n5m5p6s73f9k590 has no repository evidence, and stays blocked only
 # as a precaution; the production service recorded in the repository is srv-db3raa3ncjis73bh20p0.
 FORBIDDEN_PRODUCTION_IDENTIFIERS: tuple[str, ...] = (
+    "foodlogger-yfn4.onrender.com",
     "foodlogger.onrender.com",
     "srv-d6q76n5m5p6s73f9k590",
     "srv-db3raa3ncjis73bh20p0",
@@ -428,6 +429,11 @@ def validate_cutover_database_urls(
                     f"{label} points to unverified database {unverified_id!r}; "
                     "cutover requires a newly created replacement staging database"
                 )
+        # Migrations set session state, and Neon advises against running them through a pooler.
+        if "-pooler." in info["host"]:
+            raise ValueError(
+                f"{label} points to a pooled endpoint; cutover requires the direct host"
+            )
 
     owner_target = (owner_info["host"], owner_info["port"], owner_info["dbname"])
     app_target = (app_info["host"], app_info["port"], app_info["dbname"])

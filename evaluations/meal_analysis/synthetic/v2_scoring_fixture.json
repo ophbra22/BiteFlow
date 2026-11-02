@@ -1,0 +1,288 @@
+{
+  "schema_version": 2,
+  "synthetic": true,
+  "dataset": "SYNTHETIC scoring fixture for the v2 evaluator. No photo exists and no provider was called.",
+  "note": "synthetic_result values are invented model outputs chosen to exercise each metric. Numbers derived from this file test arithmetic only and are not accuracy results.",
+  "coverage_gaps": [],
+  "cases": [
+    {
+      "id": "syn_gravimetric_complete",
+      "file": "images/syn_gravimetric_complete.jpg",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "source_url": "synthetic://no-image",
+      "license": "CC0-1.0",
+      "ground_truth_tier": "gravimetric",
+      "expected_status": "food",
+      "locale": "he-IL",
+      "expected_items": [
+        {
+          "name": "chicken schnitzel",
+          "aliases": ["שניצל עוף"],
+          "grams": 145.0,
+          "usda_reference_id": "fdc:170718",
+          "usda_reference_name": "Fast foods, chicken, breaded and fried, boneless pieces, plain",
+          "scaled_nutrients": {"calories": 445.2, "protein": 23.1, "carbs": 21.6, "fat": 29.6}
+        },
+        {
+          "name": "white rice",
+          "aliases": ["אורז לבן"],
+          "grams": 160.0,
+          "usda_reference_id": "fdc:2708408",
+          "usda_reference_name": "Rice, white, cooked, no added fat",
+          "scaled_nutrients": {"calories": 206.4, "protein": 4.3, "carbs": 44.8, "fat": 0.4}
+        }
+      ],
+      "reference_total": {"calories": 651.6, "protein": 27.4, "carbs": 66.4, "fat": 30.0},
+      "synthetic_result": {
+        "status": "food",
+        "foods": [
+          {
+            "search_name": "white rice",
+            "name": "אורז",
+            "estimated_weight_g": 200.0,
+            "reference": {"id": "fdc:2708408"},
+            "nutrients": {"calories": 258.0, "protein": 5.3, "carbs": 56.0, "fat": 0.6}
+          },
+          {
+            "search_name": "chicken schnitzel",
+            "name": "שניצל",
+            "estimated_weight_g": 120.0,
+            "reference": {"id": "fdc:170718"},
+            "nutrients": {"calories": 368.4, "protein": 19.1, "carbs": 17.9, "fat": 24.5}
+          }
+        ],
+        "total": {"calories": 626.4, "protein": 24.4, "carbs": 73.9, "fat": 25.1}
+      }
+    },
+    {
+      "id": "syn_wrong_reference_and_correct_abstention",
+      "file": "images/syn_wrong_reference.jpg",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+      "source_url": "synthetic://no-image",
+      "license": "CC0-1.0",
+      "ground_truth_tier": "gravimetric",
+      "expected_status": "food",
+      "expected_items": [
+        {
+          "name": "white rice",
+          "aliases": [],
+          "grams": 100.0,
+          "usda_reference_id": "fdc:2708408",
+          "scaled_nutrients": {"calories": 129.0, "protein": 2.7, "carbs": 28.0, "fat": 0.3}
+        },
+        {"name": "shakshuka", "aliases": ["שקשוקה"], "grams": 200.0, "usda_reference_id": null}
+      ],
+      "reference_total": null,
+      "synthetic_result": {
+        "status": "food",
+        "foods": [
+          {
+            "search_name": "white rice",
+            "name": "white rice",
+            "estimated_weight_g": 110.0,
+            "reference": {"id": "fdc:170718"},
+            "nutrients": {"calories": 337.7, "protein": 17.5, "carbs": 16.4, "fat": 22.4}
+          },
+          {
+            "search_name": "shakshuka",
+            "name": "shakshuka",
+            "estimated_weight_g": 180.0,
+            "reference": null,
+            "nutrients": {"calories": null, "protein": null, "carbs": null, "fat": null}
+          },
+          {
+            "search_name": "pita",
+            "name": "pita",
+            "estimated_weight_g": 50.0,
+            "reference": null,
+            "nutrients": {"calories": null, "protein": null, "carbs": null, "fat": null}
+          }
+        ],
+        "total": {"calories": null, "protein": null, "carbs": null, "fat": null}
+      }
+    },
+    {
+      "id": "syn_identification_only",
+      "file": "images/syn_identification_only.jpg",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000002",
+      "source_url": "synthetic://no-image",
+      "license": "CC-BY-4.0",
+      "ground_truth_tier": "identification_only",
+      "expected_status": "food",
+      "expected_items": [
+        {"name": "hummus", "aliases": ["חומוס"], "grams": null},
+        {"name": "falafel", "aliases": ["פלאפל"], "grams": null}
+      ],
+      "reference_total": null,
+      "synthetic_result": {
+        "status": "food",
+        "foods": [
+          {
+            "search_name": "chickpea dip",
+            "name": "חומוס",
+            "estimated_weight_g": 90.0,
+            "reference": null,
+            "nutrients": {"calories": null, "protein": null, "carbs": null, "fat": null}
+          }
+        ],
+        "total": {"calories": null, "protein": null, "carbs": null, "fat": null}
+      }
+    },
+    {
+      "id": "syn_no_food_abstained",
+      "file": "images/syn_no_food_abstained.jpg",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000003",
+      "source_url": "synthetic://no-image",
+      "license": "CC0-1.0",
+      "ground_truth_tier": "abstention",
+      "expected_status": "no_food",
+      "expected_items": [],
+      "reference_total": null,
+      "synthetic_result": {
+        "status": "no_food",
+        "foods": [],
+        "total": {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
+      }
+    },
+    {
+      "id": "syn_no_food_false_alarm",
+      "file": "images/syn_no_food_false_alarm.jpg",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000004",
+      "source_url": "synthetic://no-image",
+      "license": "CC0-1.0",
+      "ground_truth_tier": "abstention",
+      "expected_status": "no_food",
+      "expected_items": [],
+      "reference_total": null,
+      "synthetic_result": {
+        "status": "food",
+        "foods": [
+          {
+            "search_name": "apple",
+            "name": "apple",
+            "estimated_weight_g": 100.0,
+            "reference": null,
+            "nutrients": {"calories": null, "protein": null, "carbs": null, "fat": null}
+          },
+          {
+            "search_name": "pear",
+            "name": "pear",
+            "estimated_weight_g": 100.0,
+            "reference": null,
+            "nutrients": {"calories": null, "protein": null, "carbs": null, "fat": null}
+          }
+        ],
+        "total": {"calories": null, "protein": null, "carbs": null, "fat": null}
+      }
+    },
+    {
+      "id": "syn_food_reported_as_no_food",
+      "file": "images/syn_food_reported_as_no_food.jpg",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000005",
+      "source_url": "synthetic://no-image",
+      "license": "CC0-1.0",
+      "ground_truth_tier": "gravimetric",
+      "expected_status": "food",
+      "expected_items": [
+        {
+          "name": "white rice",
+          "aliases": [],
+          "grams": 150.0,
+          "usda_reference_id": "fdc:2708408",
+          "scaled_nutrients": {"calories": 193.5, "protein": 4.0, "carbs": 42.0, "fat": 0.4}
+        }
+      ],
+      "reference_total": {"calories": 193.5, "protein": 4.0, "carbs": 42.0, "fat": 0.4},
+      "synthetic_result": {
+        "status": "no_food",
+        "foods": [],
+        "total": {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
+      }
+    },
+    {
+      "id": "syn_missing_reference",
+      "file": "images/syn_missing_reference.jpg",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000006",
+      "source_url": "synthetic://no-image",
+      "license": "CC0-1.0",
+      "ground_truth_tier": "gravimetric",
+      "expected_status": "food",
+      "expected_items": [
+        {
+          "name": "white rice",
+          "aliases": [],
+          "grams": 100.0,
+          "usda_reference_id": "fdc:2708408",
+          "scaled_nutrients": {"calories": 129.0, "protein": 2.7, "carbs": 28.0, "fat": 0.3}
+        }
+      ],
+      "reference_total": {"calories": 129.0, "protein": 2.7, "carbs": 28.0, "fat": 0.3},
+      "synthetic_result": {
+        "status": "food",
+        "foods": [
+          {
+            "search_name": "white rice",
+            "name": "white rice",
+            "estimated_weight_g": 100.0,
+            "reference": null,
+            "nutrients": {"calories": null, "protein": null, "carbs": null, "fat": null}
+          }
+        ],
+        "total": {"calories": null, "protein": null, "carbs": null, "fat": null}
+      }
+    },
+    {
+      "id": "syn_false_reference",
+      "file": "images/syn_false_reference.jpg",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000007",
+      "source_url": "synthetic://no-image",
+      "license": "CC0-1.0",
+      "ground_truth_tier": "gravimetric",
+      "expected_status": "food",
+      "expected_items": [
+        {"name": "sabich", "aliases": ["סביח"], "grams": 250.0, "usda_reference_id": null}
+      ],
+      "reference_total": null,
+      "synthetic_result": {
+        "status": "food",
+        "foods": [
+          {
+            "search_name": "sabich",
+            "name": "sabich",
+            "estimated_weight_g": 300.0,
+            "reference": {"id": "fdc:170718"},
+            "nutrients": {"calories": 921.0, "protein": 47.7, "carbs": 44.7, "fat": 61.2}
+          }
+        ],
+        "total": {"calories": 921.0, "protein": 47.7, "carbs": 44.7, "fat": 61.2}
+      }
+    },
+    {
+      "id": "syn_failed_food_case",
+      "file": "images/syn_failed_food_case.jpg",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000008",
+      "source_url": "synthetic://no-image",
+      "license": "CC0-1.0",
+      "ground_truth_tier": "identification_only",
+      "expected_status": "food",
+      "expected_items": [
+        {"name": "hummus", "aliases": [], "grams": null},
+        {"name": "falafel", "aliases": [], "grams": null}
+      ],
+      "reference_total": null,
+      "synthetic_result": null
+    },
+    {
+      "id": "syn_blocked_no_food_case",
+      "file": "images/syn_blocked_no_food_case.jpg",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000009",
+      "source_url": "synthetic://no-image",
+      "license": "CC0-1.0",
+      "ground_truth_tier": "abstention",
+      "expected_status": "no_food",
+      "expected_items": [],
+      "reference_total": null,
+      "synthetic_result": null
+    }
+  ]
+}

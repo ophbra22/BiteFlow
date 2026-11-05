@@ -13,7 +13,7 @@ function fixture(run) {
     fs.mkdirSync(query, {recursive:true}); fs.mkdirSync(decoder, {recursive:true});
     fs.writeFileSync(path.join(root, 'package.json'), '{}');
     fs.writeFileSync(path.join(query, 'package.json'), '{"name":"query-string","version":"7.1.3","main":"index.js"}');
-    fs.writeFileSync(path.join(decoder, 'package.json'), '{"name":"decode-uri-component","version":"0.5.0","main":"index.js"}');
+    fs.writeFileSync(path.join(decoder, 'package.json'), '{"name":"decode-uri-component","version":"0.5.1","main":"index.js"}');
     fs.writeFileSync(path.join(decoder, 'index.js'), '');
     const original = fs.readFileSync(require.resolve('query-string'), 'utf8').replace("require('decode-uri-component').default", "require('decode-uri-component')");
     const file = path.join(query, 'index.js'); fs.writeFileSync(file, original);
@@ -36,8 +36,8 @@ test('unexpected consumer source fails closed without overwriting it', () => fix
   expect(fs.readFileSync(file,'utf8')).toBe(before);
 }));
 
-test('a changed decoder version requires review before any file is patched', () => fixture(({root,file,decoder,original}) => {
-  fs.writeFileSync(path.join(decoder,'package.json'),'{"version":"0.4.1","main":"index.js"}');
+test.each(['0.4.1', '0.5.0', '0.5.2'])('decoder %s is rejected before any file is patched', (version) => fixture(({root,file,decoder,original}) => {
+  fs.writeFileSync(path.join(decoder,'package.json'),JSON.stringify({version,main:'index.js'}));
   expect(() => prepareQueryString(root)).toThrow(/version/);
   expect(fs.readFileSync(file,'utf8')).toBe(original);
 }));

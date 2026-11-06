@@ -33,6 +33,8 @@ export type ClientDeps = {
 
 export const DEFAULT_TIMEOUT_MS = 30_000;
 export const UPLOAD_TIMEOUT_MS = 60_000;
+const GET_BUDGET_MS = 150_000;
+const GET_MAX_ATTEMPTS = 5;
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
@@ -134,6 +136,9 @@ export function createApiClient(deps: ClientDeps) {
     const canRetry = (options.method ?? 'GET') === 'GET' &&
       options.json === undefined && options.form === undefined && options.timeoutMs === undefined;
     if (!canRetry) return requestOnce<T>(path, options);
+    // One deadline covers attempts, response bodies and retry delays. The last
+    // attempt uses only the remaining budget, rather than another full 30s.
+    const deadline = Date.now() + GET_BUDGET_MS;
     const base = deps.baseUrl();
     const token = options.auth === false ? null : deps.token();
     const wakingId = Symbol();
@@ -152,14 +157,22 @@ export function createApiClient(deps: ClientDeps) {
           throw new ApiError('unauthorized', { status: 401 });
         }
         try {
-          return await requestOnce<T>(path, options);
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) throw new ApiError('timeout');
+          const result = await requestOnce<T>(path, {
+            ...options, timeoutMs: Math.min(DEFAULT_TIMEOUT_MS, remaining),
+          });
+          // Timers can be delayed while the app is suspended.
+          if (Date.now() >= deadline) throw new ApiError('timeout');
+          return result;
         } catch (error) {
           // A timeout is a possible sleeping server, not proof of one. Other
           // errors (including rate limits and rejected sessions) remain final.
-          if (!(error instanceof ApiError) || error.kind !== 'timeout' || attempt === 2) throw error;
+          if (!(error instanceof ApiError) || error.kind !== 'timeout' ||
+            attempt >= GET_MAX_ATTEMPTS - 1 || Date.now() >= deadline) throw error;
           await new Promise<void>((resolve, reject) => {
             const finish = () => { options.signal?.removeEventListener('abort', cancel); resolve(); };
-            const timer = setTimeout(finish, 1_000);
+            const timer = setTimeout(finish, Math.min(1_000, deadline - Date.now()));
             const cancel = () => {
               clearTimeout(timer);
               options.signal?.removeEventListener('abort', cancel);

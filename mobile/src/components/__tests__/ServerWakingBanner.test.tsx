@@ -1,4 +1,5 @@
 import { act, render } from '@testing-library/react-native';
+import { useEffect } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import { createApiClient } from '@/api/client';
 import { I18nProvider } from '@/i18n/I18nProvider';
@@ -24,13 +25,13 @@ test.each([
   { language: 'he', copy: /ייתכן שהשרת מתעורר/, direction: 'rtl', align: 'right' },
 ] as const)('a real client request shows and clears the $language banner', async ({ language, copy, direction, align }) => {
   const view = await render(<I18nProvider initial={language}><ServerWakingBanner /></I18nProvider>);
-  const request = server(60_000).request('/health');
+  const request = server(115_000).request('/health');
   expect(view.queryByText(copy)).toBeNull();
   await advance(10_000);
   expect(view.getByText(copy)).toHaveStyle({ writingDirection: direction, textAlign: align });
   expect(view.getByRole('status')).toHaveProp('accessibilityLiveRegion', 'polite');
   expect(SplashScreen.hideAsync).toHaveBeenCalled();
-  await advance(50_000);
+  await advance(105_000);
   await expect(request).resolves.toEqual({});
   expect(view.queryByText(copy)).toBeNull();
 });
@@ -56,9 +57,31 @@ test.each(['cancel', 'timeout'] as const)('%s clears the visible status', async 
   await advance(10_000);
   expect(view.getByRole('status')).toBeTruthy();
   if (outcome === 'cancel') await act(async () => controller.abort());
-  else await advance(90_000);
+  else await advance(140_000);
   expect(await result).toMatchObject({ kind: outcome === 'cancel' ? 'cancelled' : 'timeout' });
   expect(view.queryByRole('status')).toBeNull();
+});
+
+test('a caller unmount aborts its slow GET and clears the remaining banner', async () => {
+  const client = server(200_000);
+  let result: Promise<unknown>;
+  function Caller() {
+    useEffect(() => {
+      const controller = new AbortController();
+      result = client.request('/slow', { signal: controller.signal }).catch(error => error);
+      return () => controller.abort();
+    }, []);
+    return null;
+  }
+  const banner = await render(<I18nProvider initial="en"><ServerWakingBanner /></I18nProvider>);
+  const caller = await render(<Caller />);
+  await advance(110_000);
+  expect(banner.getByRole('status')).toBeTruthy();
+  await caller.unmount();
+  await advance(0);
+  expect(await result!).toMatchObject({ kind: 'cancelled' });
+  expect(banner.queryByRole('status')).toBeNull();
+  expect(jest.getTimerCount()).toBe(0);
 });
 
 test('mounting during an existing wake shows current status; a mutation never shows it', async () => {

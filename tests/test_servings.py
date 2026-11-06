@@ -1,10 +1,40 @@
+import hashlib
+import re
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
+from foodlogger import food_providers
 from foodlogger.database import Database
 from foodlogger.food_providers import reference_version
 from foodlogger.servings import Servings, normalize_unit
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_reference_version_ignores_line_endings_and_keeps_the_lf_value(tmp_path, monkeypatch):
+    lf_content = b'{\n  "foods": []\n}\n'
+    versions = {}
+    try:
+        for name, content in [("lf", lf_content), ("crlf", lf_content.replace(b"\n", b"\r\n"))]:
+            package = tmp_path / name
+            (package / "data").mkdir(parents=True)
+            (package / "data" / "usda_reference.json").write_bytes(content)
+            monkeypatch.setattr(food_providers, "files", lambda _, root=package: root)
+            reference_version.cache_clear()
+            versions[name] = reference_version()
+    finally:
+        monkeypatch.undo()
+        reference_version.cache_clear()
+    assert versions["lf"] == versions["crlf"]
+    assert versions["lf"] == "sha256:" + hashlib.sha256(lf_content).hexdigest()
+
+
+def test_serving_seeds_pin_the_current_reference_version():
+    migration = ROOT / "supabase/migrations/20261014072459_p06_servings.sql"
+    pinned = set(re.findall(r"sha256:[0-9a-f]{64}", migration.read_text(encoding="utf-8")))
+    assert pinned == {reference_version()}
 
 
 def test_selected_food_version_and_size_define_portion(tmp_path):

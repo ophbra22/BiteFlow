@@ -1,8 +1,11 @@
 """Stage 0 regressions for render.yaml, 16-migration cutover, and staging smoke safety gates."""
 
 import importlib.util
+import json
+import os
 import py_compile
 import shutil
+import ssl
 import subprocess
 import sys
 from pathlib import Path
@@ -542,12 +545,133 @@ def test_staging_identity_matches_the_release_readiness_record():
     record = (ROOT / "docs/biteflow/release-readiness/testflight-rc12-15.md").read_text(
         encoding="utf-8"
     )
+    # Empty tuples would pass both loops without checking anything.
+    assert module.EXPIRING_STAGING_DB_IDS
+    assert module.UNVERIFIED_STAGING_DB_IDS
+    assert module.APPROVED_STAGING_HOSTS
     for db_id in module.EXPIRING_STAGING_DB_IDS:
         assert db_id in record
     for db_id in module.UNVERIFIED_STAGING_DB_IDS:
         assert db_id not in record
+    for host in module.APPROVED_STAGING_HOSTS:
+        assert host in record
     assert module.DEFAULT_STAGING_ORIGIN in record
     assert module.validate_staging_origin(module.DEFAULT_STAGING_ORIGIN)
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://foodlogger-yfn4.onrender.com",
+        "https://FOODLOGGER-YFN4.ONRENDER.COM",
+        "https://foodlogger-yfn4.onrender.com.",
+        "https://foodlogger-yfn4.onrender.com:443/",
+    ],
+)
+@pytest.mark.parametrize("override", [None, "foodlogger-yfn4.onrender.com", "other.example"])
+def test_real_production_host_is_refused_with_or_without_the_override(origin, override):
+    module = _load_cutover_module()
+    with pytest.raises(ValueError, match="production identifier"):
+        module.validate_staging_origin(origin, allow_staging_host=override)
+
+
+def test_production_host_override_alone_is_refused():
+    module = _load_cutover_module()
+    with pytest.raises(ValueError, match="cannot override production identifier"):
+        module.validate_staging_origin(
+            module.DEFAULT_STAGING_ORIGIN, allow_staging_host="FOODLOGGER-YFN4.onrender.com"
+        )
+
+
+def test_production_url_in_the_mobile_build_config_is_refused():
+    module = _load_cutover_module()
+    eas = json.loads((ROOT / "mobile/eas.json").read_text(encoding="utf-8"))
+    production_url = eas["build"]["production"]["env"]["EXPO_PUBLIC_API_URL"]
+    with pytest.raises(ValueError, match="production identifier"):
+        module.validate_staging_origin(
+            production_url, allow_staging_host=production_url.removeprefix("https://")
+        )
+
+
+def test_cli_hosted_smoke_refuses_production_before_opening_a_client(monkeypatch):
+    module = _load_cutover_module()
+
+    def no_client(*args, **kwargs):
+        raise RuntimeError("no HTTP client may open against production")
+
+    monkeypatch.setattr(module.httpx, "Client", no_client)
+    with pytest.raises(ValueError, match="production identifier"):
+        module.main(
+            [
+                "--mode",
+                "hosted-smoke",
+                "--origin",
+                "https://foodlogger-yfn4.onrender.com",
+                "--allow-staging-host",
+                "foodlogger-yfn4.onrender.com",
+                "--expected-commit",
+                "4a9d6b6",
+            ]
+        )
+
+
+def test_cutover_smoke_refuses_production_before_any_connection(connections, monkeypatch):
+    module = _load_cutover_module()
+    monkeypatch.setattr(module, "require_proven_ancestry", lambda *args, **kwargs: "fixture")
+    with pytest.raises(ValueError, match="production identifier"):
+        module.apply_postgres_cutover(
+            OWNER_DSN,
+            APP_DSN,
+            "apppass",
+            staging_url="https://foodlogger-yfn4.onrender.com",
+            allow_staging_host="foodlogger-yfn4.onrender.com",
+            expected_commit="4a9d6b6",
+            root=ROOT,
+        )
+    assert connections == []
+
+
+NEON_HOST = "ep-fixture-123456.eu-central-1.aws.neon.tech"
+NEON_POOLED_HOST = "ep-fixture-123456-pooler.eu-central-1.aws.neon.tech"
+
+
+def test_direct_neon_urls_pass_the_cutover_target_checks():
+    module = _load_cutover_module()
+    target = module.validate_cutover_database_urls(
+        f"postgresql://neondb_owner:pw@{NEON_HOST}/neondb?sslmode=verify-full",
+        f"postgresql://foodlogger_app:pw@{NEON_HOST}/neondb?sslmode=verify-full",
+    )
+    assert target["host"] == NEON_HOST
+    assert target["admin_user"] == "neondb_owner"
+
+
+@pytest.mark.parametrize(
+    "owner_host,app_host",
+    [(NEON_POOLED_HOST, NEON_POOLED_HOST), (NEON_HOST, NEON_POOLED_HOST)],
+)
+def test_pooled_endpoints_are_refused_for_cutover(owner_host, app_host):
+    module = _load_cutover_module()
+    with pytest.raises(ValueError, match="pooled endpoint"):
+        module.validate_cutover_database_urls(
+            f"postgresql://neondb_owner:pw@{owner_host}/neondb",
+            f"postgresql://foodlogger_app:pw@{app_host}/neondb",
+        )
+
+
+@pytest.mark.parametrize(
+    "query,match",
+    [
+        ("sslmode=require", "verify-full"),
+        ("sslmode=verify-full&channel_binding=require", "channel_binding"),
+    ],
+)
+def test_weaker_or_extra_neon_url_parameters_are_refused(query, match):
+    module = _load_cutover_module()
+    with pytest.raises(ValueError, match=match):
+        module.validate_cutover_database_urls(
+            f"postgresql://neondb_owner:pw@{NEON_HOST}/neondb?{query}",
+            f"postgresql://foodlogger_app:pw@{NEON_HOST}/neondb",
+        )
 
 
 def test_unlisted_staging_host_needs_the_explicit_override():
@@ -687,6 +811,54 @@ class _RecordingStagingClient:
     def post(self, path, **kwargs):
         self.calls.append(f"POST {path}")
         raise AssertionError(f"Unexpected POST {path}")
+
+
+@pytest.fixture
+def no_system_ca(monkeypatch):
+    """Report a CA file only through SSL_CERT_FILE, as Python does on Windows."""
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    paths = ssl.get_default_verify_paths()
+    monkeypatch.setattr(
+        ssl,
+        "get_default_verify_paths",
+        lambda: paths._replace(cafile=os.environ.get("SSL_CERT_FILE")),
+    )
+
+
+def test_ca_fallback_keeps_verify_full_and_does_not_leak(no_system_ca):
+    module = _load_cutover_module()
+    contract = module.verify_tls_and_role_contract()
+    assert contract["sslmode"] == "verify-full"
+    assert contract["trusted_ca_count"] > 0
+    assert "SSL_CERT_FILE" not in os.environ
+
+    parsed = module._parse_postgres_dsn(APP_DSN, "app_database_url")
+    assert parsed["connection_options"]["sslmode"] == "verify-full"
+    assert parsed["connection_options"]["sslrootcert"]
+    assert "SSL_CERT_FILE" not in os.environ
+
+    module.validate_cutover_database_urls(OWNER_DSN, APP_DSN)
+    assert "SSL_CERT_FILE" not in os.environ
+
+
+def test_ca_fallback_is_restored_when_a_cutover_fails(no_system_ca, connections, monkeypatch):
+    module = _load_cutover_module()
+    monkeypatch.setattr(module, "require_proven_ancestry", lambda *args, **kwargs: "fixture")
+    with pytest.raises(_ConnectionReached):
+        module.apply_postgres_cutover(
+            OWNER_DSN, APP_DSN, "apppass", expected_commit="4a9d6b6", root=ROOT
+        )
+    assert connections[0]["sslmode"] == "verify-full"
+    assert "SSL_CERT_FILE" not in os.environ
+
+
+def test_ca_fallback_never_replaces_an_operator_setting(no_system_ca, tmp_path, monkeypatch):
+    module = _load_cutover_module()
+    operator_bundle = tmp_path / "operator-ca.pem"
+    monkeypatch.setenv("SSL_CERT_FILE", str(operator_bundle))
+    parsed = module._parse_postgres_dsn(APP_DSN, "app_database_url")
+    assert parsed["connection_options"]["sslrootcert"] == str(operator_bundle)
+    assert os.environ["SSL_CERT_FILE"] == str(operator_bundle)
 
 
 def test_nutrition_contracts_cover_every_required_commit():

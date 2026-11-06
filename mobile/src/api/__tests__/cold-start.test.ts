@@ -128,7 +128,7 @@ test('network rejection is final and never retries', async () => {
   expect(jest.getTimerCount()).toBe(0);
 });
 
-test('overall deadline also aborts a stalled response body', async () => {
+test('a stalled successful response body times out without repeating a received response', async () => {
   const signals: AbortSignal[] = [];
   const client = createApiClient({ baseUrl: () => 'https://fake.test', token: () => 'account-a',
     onSessionRejected: jest.fn(), fetch: (async (_url, init) => {
@@ -141,7 +141,7 @@ test('overall deadline also aborts a stalled response body', async () => {
   const result = client.request('/health').catch(error => error);
   await jest.advanceTimersByTimeAsync(150_000);
   expect(await result).toMatchObject({ kind: 'timeout' });
-  expect(signals).toHaveLength(5);
+  expect(signals).toHaveLength(1);
   expect(signals.every(signal => signal.aborted)).toBe(true);
   expect(getServerWakingSnapshot()).toBe(false);
   expect(jest.getTimerCount()).toBe(0);

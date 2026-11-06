@@ -3,7 +3,9 @@
 ## 1. Objective & Scope Boundary
 This document specifies the design, dataset schema, licensing gates, ground-truth protocol, metrics, and quota/cost guardrails for BiteFlow's held-out multimodal meal-photo evaluation benchmark (**G58**).
 
-- **Zero Live API Calls in CI / Offline Suites:** All automated tests (`tests/test_nutrition_eval.py`, `tests/test_meal_analysis_evaluation.py`) run strictly offline without calling live vision providers. Currently, `scripts/evaluate_meal_analysis.py` exposes `--mode {baseline,vision}`, `--output`, and `--interval-seconds` (default `13.0`); under this proposal, live multimodal evaluation (`--mode vision`) will be gated behind explicit opt-in flags (`--allow-live-api` and hard budget/case caps) before any full held-out run.
+**Status:** the evaluator (metrics, manifest validation, guardrails) is implemented in `scripts/evaluate_meal_analysis.py` and documented in `evaluations/meal_analysis/README.md`. The benchmark itself is **NOT RUN**: no held-out dataset exists and no v2 metric has been measured on a photo.
+
+- **Zero Live API Calls in CI / Offline Suites:** All automated tests (`tests/test_nutrition_eval.py`, `tests/test_meal_analysis_evaluation.py`, `tests/test_meal_analysis_evaluation_v2.py`) run offline without calling live vision providers. `--mode vision` with a non-local provider requires `--allow-live-api`, with a hard case cap and a post-response token threshold.
 - **No Extrapolation from Retrieval Benchmarks:** Offline USDA reference retrieval metrics (`evaluations/nutrition_reference/`) measure deterministic text normalization and lookup only; they must never be reported as photo recognition or portion estimation accuracy.
 
 ---
@@ -14,8 +16,8 @@ Every image in the held-out photo benchmark must satisfy strict provenance and l
 
 1. **Permitted Sources & Licenses:**
    - **First-Party Weighed Meal Photos (Primary Israeli & Home-Cooked Tier):** Original photos captured by team members or consenting testers where each component is weighed on a digital kitchen scale (`±1 g` precision) prior to plating, released under **CC0-1.0** or **CC-BY-4.0** with signed contributor consent and EXIF location/PII stripped.
-   - **Nutrition5k (Google Research):** Overhead/multi-angle cafeteria plates with gravimetric component weights and USDA-linked macronutrients (permitted for non-commercial research benchmarking; images must be fetched locally on-demand via manifest checksums rather than redistributed in binary builds).
-   - **FoodRecognition / Open-Access Subsets (CC0 / CC-BY-4.0 / Pexels / Wikimedia Commons):** Publicly licensed meal photos used strictly for **component identification and negative-control/abstention** cases where exact gram ground truth is marked `null` (`evaluation_tier: "identification_only"`), or paired with standardized packaged unit weights.
+   - **Nutrition5k (Google Research):** Overhead/multi-angle cafeteria plates with measured component weights and published nutrition, licensed **CC-BY-4.0** as recorded in `evaluations/meal_analysis/manifest.json`. Use `"reference_total_source": "published_dataset"`, because these totals do not come from `usda_reference.json`. The eight images already in that manifest are not held out.
+   - **Open-Access Subsets (CC0-1.0 / CC-BY-4.0):** Publicly licensed meal photos used strictly for **component identification and negative-control/abstention** cases where exact gram ground truth is `null` (`ground_truth_tier: "identification_only"`). The v2 validator rejects any other license, including CC BY-SA and the Pexels license, unless the user approves adding it.
 2. **Prohibited Sources:**
    - Scraped social media, restaurant delivery menus, or copyrighted food blogs without an explicit open license.
    - Any image containing faces, readable license plates, personal documents, or unconsented bystanders.
@@ -31,16 +33,16 @@ To stay within free-tier API quotas while covering real-world failure modes, the
 | :--- | :---: | :--- | :--- |
 | **A. Gravimetric Single & Multi-Item Plates** | 25 | Everyday plates (eggs, chicken breast, rice, salad, salmon, pasta, fruits) weighed per component on a kitchen scale (`±1 g`). | `gravimetric` (ID + grams + kcal/macros) |
 | **B. Israeli & Middle Eastern Dishes** | 15 | Hummus, falafel, schnitzel, pita, cottage cheese, Israeli salad, plus composite dishes (`שקשוקה`, `סביח`, `בורקס`, `מלאווח`) that test decomposition vs. USDA abstention. | `gravimetric` / `decomposition` |
-| **C. Packaged & Ambiguous Preparation Cases** | 10 | Visually ambiguous items (fried vs. baked, skinless vs. skin-on, dressing on side vs. mixed, obscure sauces) testing clarification questions (`needs_clarification`). | `clarification_and_id` |
+| **C. Packaged & Ambiguous Preparation Cases** | 10 | Visually ambiguous items (fried vs. baked, skinless vs. skin-on, dressing on side vs. mixed, obscure sauces) testing clarification questions. `AnalysisResult.status` has no `needs_clarification` value, so these cases use `expected_status: "uncertain"` where the photo truly cannot be resolved. A per-food clarification metric is not implemented. | `clarification_and_id` |
 | **D. Negative Controls & Abstention Cases** | 10 | Empty plates, non-food objects, severely blurred/dark frames, closed opaque containers, and pets/landscapes (`expected_status: "no_food"`). | `abstention` |
 
 ---
 
-## 4. Benchmark Manifest Schema (Current v1 vs. Proposed v2 Extension)
+## 4. Benchmark Manifest Schema (v1 and v2)
 
-Currently, `scripts/evaluate_meal_analysis.py` reads `evaluations/meal_analysis/manifest.json` with meal-level fields (`id`, `file`, `sha256`, `source_url`, `license`, `expected_status`, `visible_food_labels`, `reference_total`, and `ground_truth_tier`).
+By default, `scripts/evaluate_meal_analysis.py` reads `evaluations/meal_analysis/manifest.json`. The evaluator uses these v1 case fields: `id`, `file`, `sha256`, `expected_status`, `visible_food_labels`, and `reference_total`.
 
-To support per-component portion MAE and canonical USDA reference verification in **G58**, the proposed v2 manifest (`evaluations/meal_analysis/benchmark.heldout.json`) preserves backward-compatible top-level keys while adding `expected_items` with weighed grams and canonical `fdc:*` IDs:
+To support per-component portion MAE and canonical USDA reference verification in **G58**, a v2 manifest (`"schema_version": 2`, passed with `--manifest evaluations/meal_analysis/benchmark.heldout.json`; this file does not exist yet) adds `expected_items` with weighed grams and canonical `fdc:*` IDs. One case looks like this. The photo, scale, URL and hash below are illustrative only; the nutrient values are computed from the bundled reference:
 
 ```json
 {
@@ -119,35 +121,38 @@ To support per-component portion MAE and canonical USDA reference verification i
 
 ---
 
-## 6. Evaluation Metrics: Current v1 (`scripts/evaluate_meal_analysis.py`) vs. Proposed v2 Extensions
+## 6. Evaluation Metrics: v1 and v2 (`scripts/evaluate_meal_analysis.py`)
 
-Currently, `scripts/evaluate_meal_analysis.py` implements `detection(expected, predicted)` and `summarize(rows)`, outputting the following exact v1 summary keys:
+`scripts/evaluate_meal_analysis.py` implements `detection(expected, predicted)` and `summarize(rows)`, outputting the following v1 summary keys:
 - `completed`, `failed_or_blocked`, `completion_rate`
 - `tp`, `fp`, `fn`, `precision`, `recall`, `end_to_end_recall`, `missed_item_rate`, `false_discovery_rate`
 - `mean_latency_ms`
 - `mean_absolute_error` (`{"grams": ..., "calories": ..., "protein": ..., "fat": ..., "carbs": ...}` at the meal total level) and `error_sample_counts`
 - `paid_api_cost_usd`
 
-For the full **G58** held-out benchmark, `scripts/evaluate_meal_analysis.py` will retain all existing v1 `summarize(rows)` keys and add the following v2 metrics:
+For the **G58** held-out benchmark, `scripts/evaluate_meal_analysis.py` retains all v1 `summarize(rows)` keys and adds the following v2 metrics. Exact definitions are in `evaluations/meal_analysis/README.md`.
 
-| Metric Area | Current v1 Implementation (`detection` / `summarize`) | Proposed v2 Extension for G58 |
+| Metric Area | v1 (`detection` / `summarize`) | v2 addition for G58 |
 | :--- | :--- | :--- |
-| **1. Component Detection** | `detection(expected, predicted)` counts `tp`, `fp`, `fn` via `canonical()`; `summarize()` reports `precision`, `recall`, `end_to_end_recall`, `missed_item_rate`, `false_discovery_rate`. | Add `f1` ($\frac{2 \cdot \text{TP}}{2 \cdot \text{TP} + \text{FP} + \text{FN}}$) and expand `LABELS` in `canonical()` to cover the full 60-case benchmark vocabulary. |
-| **2. Portion Estimation Error** | Meal-level total gram MAE via `mean_absolute_error["grams"]` on `reference_total["grams"]`. | Add per-component gram MAE (`item_grams_mae`) and MAPE (`item_grams_mape`) matched against `expected_items[i].grams`: $\frac{1}{M} \sum_{i=1}^{M} |\hat{g}_i - g_i|$. |
-| **3. Calorie & Macro Error** | Meal-level `mean_absolute_error["calories"]`, `["protein"]`, `["fat"]`, `["carbs"]` and `error_sample_counts` over completed non-`no_food` runs. | Add meal-level calorie MAPE (`calorie_mape`) and per-component nutrient MAE on `gravimetric` cases. |
-| **4. USDA Reference Grounding** | Not tracked in v1 `summarize()`. | Add `usda_reference_accuracy`: fraction of matched components whose resolved `reference.id` matches `expected_items[i].usda_reference_id`. |
-| **5. Abstention / Negative Controls** | Evaluated via `detection([], predicted)` (`fp` count when `visible_food_labels` is `[]`). | Add explicit `non_food_abstention_rate` and `status_accuracy` over Cohort D (`expected_status == "no_food"` returning `status == "no_food"` and `foods == []`). |
-| **6. Failure & Quota Accounting** | Tracks `completed`, `failed_or_blocked`, `completion_rate`, and penalizes failed/blocked cases in `end_to_end_recall`. | Preserve `failed_or_blocked` and `end_to_end_recall` invariants without modification. |
+| **1. Component Detection** | `detection(expected, predicted)` counts `tp`, `fp`, `fn` via `canonical()`; `summarize()` reports `precision`, `recall`, `end_to_end_recall`, `missed_item_rate`, `false_discovery_rate`. | `f1` ($\frac{2 \cdot \text{TP}}{2 \cdot \text{TP} + \text{FP} + \text{FN}}$). Cases with `expected_items` are matched by per-item aliases rather than a larger `LABELS`, because `canonical()` prefix matching treats "eggplant" as "egg". |
+| **2. Portion Estimation Error** | Meal-level total gram MAE via `mean_absolute_error["grams"]` on `reference_total["grams"]`. | Per-component gram MAE (`item_grams_mae`) and MAPE (`item_grams_mape`) matched against `expected_items[i].grams`: $\frac{1}{M} \sum_{i=1}^{M} |\hat{g}_i - g_i|$. |
+| **3. Calorie & Macro Error** | Meal-level `mean_absolute_error["calories"]`, `["protein"]`, `["fat"]`, `["carbs"]` and `error_sample_counts` over completed non-`no_food` runs. | Meal-level calorie MAPE (`calorie_mape`) and per-component nutrient MAE (`item_nutrient_mae`) on `gravimetric` cases. |
+| **4. USDA Reference Grounding** | Not tracked in v1 `summarize()`. | `usda_reference_accuracy`: fraction of matched components whose resolved `reference.id` matches `expected_items[i].usda_reference_id`, where `null` expects no reference. `usda_reference_counts` separates `wrong`, `missing` and `false_reference`. |
+| **5. Abstention / Negative Controls** | Evaluated via `detection([], predicted)` (`fp` count when `visible_food_labels` is `[]`). | `non_food_abstention_rate` over completed `no_food` cases (`status == "no_food"` and `foods == []`). `status_accuracy` covers all completed cases, so it also catches food photos reported as `no_food`. |
+| **6. Failure & Quota Accounting** | Tracks `completed`, `failed_or_blocked`, `completion_rate`, and penalizes failed/blocked cases in `end_to_end_recall`. | `failed_or_blocked` and `end_to_end_recall` are unchanged. |
 
 ---
 
-## 7. Proposed Cost, Quota & Rate-Limit Guardrails
+## 7. Cost, Quota & Rate-Limit Guardrails
 
-Because the active Gemini API key operates on the **free tier**, live benchmark execution (`python scripts/evaluate_meal_analysis.py --mode vision`, which currently paces requests using `--interval-seconds` with a default of `13.0` s and stops on `VisionQuotaExceeded`) should be extended with three additional guardrails before running the 60-case held-out set:
+The active Gemini API key operates on the **free tier**, so live execution (`--mode vision`) paces requests with `--interval-seconds` (default `13.0` s), stops on `VisionQuotaExceeded`, and has these guardrails:
 
-1. **Explicit Opt-In & Max-Cases Cap (Proposed CLI Flags):**
-   - Require `--allow-live-api` when `--mode vision` is selected, plus `--max-cases` (default `10` for smoke runs, max `60` for full release-candidate gate) while retaining `--interval-seconds` (default `13.0` s pacing between requests) to prevent `429 RESOURCE_EXHAUSTED` failures.
-2. **Content-Addressable Response Caching (Proposed Eval-Only Cache):**
-   - Keyed by `(sha256, prompt_version_sha256, model_id)` in a local gitignored directory (`.eval_cache/`) so re-scoring deterministic USDA retrieval changes (`nutrition_reference.py`) costs **0 API calls**.
-3. **Hard Budget Circuit Breaker:**
-   - Complement the existing `VisionQuotaExceeded` stop with a circuit breaker that aborts if consecutive non-quota `VisionUnavailable` errors exceed `3` or if total token usage exceeds `--max-total-tokens 150000`.
+1. **Explicit Opt-In & Max-Cases Cap:**
+   - `--allow-live-api` is required for a non-local provider. `--max-cases` defaults to `10` for smoke runs and accepts at most `60` for the full gate.
+2. **Eval-Only Response Cache (opt-in):**
+   - `--cache-dir .eval_cache` stores observations keyed by prompt, model, options and prepared image, and the directory ignores itself in git. `--cache-only` re-scores retrieval changes (`nutrition_reference.py`) with **0 API calls**. It is opt-in so a re-run is never mistaken for a new measurement.
+3. **Budget Circuit Breaker:**
+   - The run stops if consecutive non-quota `VisionUnavailable` errors exceed `3`, or if total token usage exceeds `--max-total-tokens` (default `150000`).
+   - The token threshold is checked after a response, so the final call can overshoot it. Failed calls without usage metadata are not included in token accounting. `live_provider_calls` counts `recognize()` calls; internal HTTP retries can consume additional quota.
+
+**Expected use for the full 60-case run:** at least 60 requests, and up to 120 attempts if every request retries once on a 5xx or connection error. Failed attempts also count against quota. The 8-image `gemini-lite-recheck-report.json` used a mean of 2,020 and a maximum of 2,384 total tokens per image, which suggests about 121,000 to 143,000 tokens, close to the default cap. It averaged 20.67 s per image, so with 13 s spacing the run takes about 33 minutes. These are estimates from a small sample with no Hebrew requests. The free tier's current daily limit is not verified here and must be checked before a run.

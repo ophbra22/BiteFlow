@@ -128,7 +128,7 @@ def test_bad_input_is_rejected_without_echo_or_output(tmp_path, data):
 
 
 @pytest.mark.parametrize("existing", ["file", "directory", "symlink"])
-def test_existing_output_is_never_overwritten(tmp_path, existing):
+def test_existing_output_is_never_overwritten(tmp_path, existing, make_symlink):
     out = tmp_path / "report"
     target = tmp_path / "kept"
     target.mkdir()
@@ -139,7 +139,7 @@ def test_existing_output_is_never_overwritten(tmp_path, existing):
         out.mkdir()
         (out / "report.json").write_text("existing")
     else:
-        out.symlink_to(target, target_is_directory=True)
+        make_symlink(out, target, target_is_directory=True)
     result, _ = run(tmp_path, synthetic(), out)
     assert result.returncode == 2
     assert result.stderr == "Cannot create report: invalid input or unavailable output.\n"

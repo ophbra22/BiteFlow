@@ -56,8 +56,10 @@ def regional_query(query):
 
 @lru_cache(maxsize=1)
 def reference_version():
+    # Serving seeds pin this hash, so a CRLF checkout must not change it. The extract is
+    # stored with LF endings, and JSON strings cannot hold a raw CR, so its value is unchanged.
     data = files("foodlogger").joinpath("data/usda_reference.json").read_bytes()
-    return "sha256:" + hashlib.sha256(data).hexdigest()
+    return "sha256:" + hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
 
 
 def validate_extract(data):

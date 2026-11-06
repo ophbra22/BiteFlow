@@ -72,7 +72,7 @@ From the repository root, with Python 3.11/3.12 and the project installed:
 ```sh
 python scripts/fetch_meal_eval.py
 python scripts/evaluate_meal_analysis.py --mode baseline
-FOODLOGGER_VISION_MODEL=gemini-3.5-flash-lite python scripts/evaluate_meal_analysis.py --mode vision --interval-seconds 5 --output evaluations/meal_analysis/new-report.json
+FOODLOGGER_VISION_MODEL=gemini-3.5-flash-lite python scripts/evaluate_meal_analysis.py --mode vision --allow-live-api --interval-seconds 5 --output evaluations/meal_analysis/new-report.json
 FOODLOGGER_VISION_MODEL=gemini-3.5-flash-lite python scripts/evaluate_meal_challenges.py
 FOODLOGGER_VISION_MODEL=gemini-3.5-flash-lite python scripts/smoke_meal_analysis_live.py
 ```
@@ -89,6 +89,93 @@ long-term uptime, multi-user load, physical-phone UX, all cuisines or hidden oil
 Do not infer that an empty-plate test covers all possible non-food photographs.
 The supplemental examples cover some Mediterranean/multiple-dish cases that the
 core manifest explicitly lacks; neither dataset provides full coverage.
+
+## Evaluator v2 (T5.5)
+
+The held-out photo benchmark (G58) is **NOT RUN**. No v2 metric has been measured
+on a photo. `synthetic/v2_scoring_fixture.json` holds invented model outputs that
+test the arithmetic, and its numbers are not accuracy results. Design and dataset
+gates are in `docs/photo-benchmark-proposal.md`.
+
+All v1 `summarize()` keys keep their meaning, and a test recomputes them from
+every committed report. Rates are fractions, so 0.125 means 12.5%. These keys are
+added, and each stays `null` when it has no evidence:
+
+| Key | Definition | Covers |
+|---|---|---|
+| `f1` | 2·TP / (2·TP + FP + FN) | Completed cases |
+| `status_accuracy` | Predicted status equals `expected_status` | Completed cases |
+| `non_food_abstention_rate` | `status == "no_food"` and no foods | Completed `no_food` cases |
+| `usda_reference_accuracy` | Reference outcome is `correct` | Matched items with `usda_reference_id` |
+| `usda_reference_counts` | `correct`, `wrong`, `missing`, `false_reference` | Same as above |
+| `item_grams_mae`, `item_grams_mape` | Error of `estimated_weight_g` against `grams` | Matched items with `grams` |
+| `calorie_mape` | Meal calorie error / reference calories | Completed cases with both values |
+| `item_nutrient_mae` | Error per nutrient against `scaled_nutrients` | Matched `gravimetric` items |
+| `v2_sample_counts` | Sample size behind each metric above | |
+
+- A failed or blocked case earns no credit and no error. `failed_or_blocked` and
+  `end_to_end_recall` show it, so read conditional metrics next to them.
+- Missing nutrition stays missing. It adds to `item_nutrient_missing`, never a zero error.
+- `usda_reference_id: null` means no reference is expected. Returning none is `correct`,
+  and returning one is `false_reference`. An absent key leaves the item unannotated.
+- Item metrics cover matched items only. Missed components count against recall.
+- Errors can come from recognition, portion or retrieval. This does not separate them.
+- Baseline mode scores v2 `expected_items` using the same aliases as vision, without
+  requiring legacy `visible_food_labels`. Its classifier statuses do not map to the
+  vision status vocabulary, so status metrics remain `null`, as do portion metrics.
+
+### Manifest v2
+
+Pass `--manifest PATH`. A file with `"schema_version": 2` is validated before any
+image is read or request is made. Cases follow the example in the proposal. The
+validator requires a license of `CC0-1.0` or `CC-BY-4.0`, a relative `file`, a known
+status and tier, and recomputes `scaled_nutrients` and `reference_total` from
+`usda_reference.json`. Measured totals from a dataset declare
+`"reference_total_source": "published_dataset"` and skip that recomputation.
+Both sources still validate field shapes and finite nonnegative numbers (or `null`).
+USDA total grams, when provided, must equal the sum of annotated item grams.
+`"synthetic": true` labels the report and its first limitation.
+
+Items are matched by whole-phrase `name` and `aliases` against `search_name` and the
+displayed `name`, one to one. This replaces the proposal's plan to grow `LABELS`:
+`canonical()` matches prefixes, so it treats "eggplant" as "egg" and "grapefruit"
+as "grape". v1 manifests still use `canonical()`, unchanged, so old numbers stay
+comparable.
+
+### CLI changes from v1
+
+Flags `--mode`, `--output` and `--interval-seconds` are unchanged. New flags:
+`--manifest`, `--allow-live-api`, `--max-cases`, `--max-total-tokens`, `--cache-dir`
+and `--cache-only`. These change an existing command:
+
+1. `--mode vision` with a non-local provider exits with code 2 unless it has
+   `--allow-live-api`. Local Ollama (`docs/LOCAL_VISION_BENCHMARK_HE.md`) is exempt.
+2. `--max-cases` defaults to 10 and accepts at most 60. A shorter run reports
+   `"truncated": true`. The 8-case v1 manifest is not affected.
+3. After more than 3 consecutive provider failures, the remaining cases are `blocked`.
+   v1 kept calling.
+4. After `--max-total-tokens` (default 150000), the remaining cases are `blocked`.
+   This is a post-response threshold: the final call can overshoot it, and failed
+   requests with no usage metadata cannot be included in token accounting.
+5. Image hashes are checked before the first request, not as each case is reached.
+6. Reports gain `evaluator_version`, `manifest_schema_version`, `synthetic`,
+   `cases_in_manifest`, `cases_evaluated`, `truncated`, `live_provider_calls`,
+   `cache_hits`, `tokens_used` and `stop_reason`, plus a limitation about item metrics.
+   With `--manifest`, the default report is `<manifest stem>-<mode>-report.json` beside it.
+
+`--cache-dir` is opt-in, because a replay is not a new measurement. It stores the
+provider's observation, keyed by provider/backend implementation, endpoint digest,
+model/revision, prompt, options and prepared image, and
+grounding reruns on replay. `--cache-only` re-scores a retrieval change with no
+provider and no `--allow-live-api`. Reports count replays, and a miss is a failed case.
+Cache files store this provider provenance and validate it before replay; old files
+without provenance are not reused. `provider_provenance` in reports records the
+identity used. Endpoint URLs are hashed to avoid recording embedded credentials.
+`model_revision: null` means the provider exposes only a model name, not a pinned
+revision; cache replay remains a historical observation, not a new result from a
+potentially updated model behind that name.
+`live_provider_calls` counts calls to `recognize()`, including failed calls; a
+provider's internal HTTP retries can make additional attempts against quota.
 
 ## Attribution and licenses
 

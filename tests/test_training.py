@@ -25,7 +25,8 @@ def test_split_is_stratified_repeatable_and_keeps_test_separate(tmp_path):
     assert {label for _, label in manifest["validation"]} == {0, 1}
     all_paths = [path for split in ("train", "validation", "test") for path, _ in manifest[split]]
     assert len(all_paths) == len(set(all_paths))
-    assert all("/test/" in path for path, _ in manifest["test"])
+    root = tmp_path.resolve()
+    assert all(Path(path).relative_to(root).parts[0] == "test" for path, _ in manifest["test"])
 
 
 def test_missing_or_mismatched_test_classes_are_rejected(tmp_path):
@@ -43,11 +44,11 @@ def test_too_few_training_images_fail_before_tensorflow(tmp_path):
         split_dataset(tmp_path)
 
 
-def test_path_overlap_between_train_and_test_is_rejected(tmp_path):
+def test_path_overlap_between_train_and_test_is_rejected(tmp_path, make_symlink):
     make_tree(tmp_path)
     test_image = tmp_path / "test" / "pizza" / "0.jpg"
     test_image.unlink()
-    test_image.symlink_to(tmp_path / "train" / "pizza" / "0.jpg")
+    make_symlink(test_image, tmp_path / "train" / "pizza" / "0.jpg")
     with pytest.raises(ValueError, match="overlap"):
         split_dataset(tmp_path)
 

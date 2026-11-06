@@ -17,7 +17,7 @@ function prepareQueryString(projectRoot, check = false) {
   const decoderFile = consumerRequire.resolve('decode-uri-component');
   const consumer = readJSON(path.join(path.dirname(consumerFile), 'package.json'));
   const decoder = readJSON(path.join(path.dirname(decoderFile), 'package.json'));
-  if (consumer.version !== '7.1.3' || decoder.version !== '0.5.0') {
+  if (consumer.version !== '7.1.3' || decoder.version !== '0.5.1') {
     throw new Error('query-string adapter version drift; review before preparing dependencies');
   }
   const source = fs.readFileSync(consumerFile, 'utf8');

@@ -1,0 +1,5 @@
+# Data that is hashed or pinned by seeds keeps the repository's bytes on every platform.
+src/foodlogger/data/*.json text eol=lf
+src/foodlogger/data/*.sql text eol=lf
+supabase/migrations/*.sql text eol=lf
+*.tflite binary

@@ -1,4 +1,4 @@
-name: Verify FoodLogger
+name: Verify BiteFlow
 
 on:
   push:

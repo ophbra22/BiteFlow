@@ -170,7 +170,7 @@ def create_app(
     analyzer=None,
 ) -> FastAPI:
     settings = settings or Settings.from_environment()
-    app = FastAPI(title="FoodLogger API", version="2.1.0", description="Private food journals")
+    app = FastAPI(title="BiteFlow API", version="2.1.0", description="Private food journals")
     if settings.production:
         app.add_middleware(
             TrustedHostMiddleware,
@@ -279,7 +279,7 @@ def create_app(
 
     def auth_request(request: Request):
         if request.headers.get("x-foodlogger-request") != "1":
-            raise HTTPException(403, "Use the FoodLogger sign-in form.")
+            raise HTTPException(403, "Use the BiteFlow sign-in form.")
         address = settings.client_address(request)
         limiter.check("auth:" + address, 8, 60)
 
@@ -703,7 +703,7 @@ def create_app(
             output.getvalue(),
             media_type="text/csv",
             headers={
-                "Content-Disposition": f'attachment; filename="foodlogger-{day}.csv"',
+                "Content-Disposition": f'attachment; filename="biteflow-{day}.csv"',
             },
         )
 

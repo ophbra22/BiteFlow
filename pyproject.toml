@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "foodlogger"
 version = "2.1.0"
-description = "Food recognition, barcode nutrition lookup and private food journals with Python"
+description = "BiteFlow: food recognition, barcode nutrition lookup and private food journals with Python"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = "MIT"

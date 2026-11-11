@@ -103,7 +103,7 @@ def test_manual_journal_round_trip_and_mobile_layout(browser_page):
     expect(page.locator("#meal-count")).to_have_text("1")
     with page.expect_download() as download:
         page.locator("#export-button").click()
-    assert download.value.suggested_filename.startswith("foodlogger-")
+    assert download.value.suggested_filename.startswith("biteflow-")
     page.set_viewport_size({"width": 390, "height": 844})
     assert not page.evaluate("document.documentElement.scrollWidth > innerWidth")
     page.get_by_role("button", name="Delete Banana").click()

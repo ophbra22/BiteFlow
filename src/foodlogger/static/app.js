@@ -428,9 +428,9 @@ $("logout-button").addEventListener("click", async () => {
 $("close-recovery").addEventListener("click", () => $("recovery-dialog").close());
 $("recovery-dialog").addEventListener("close", () => { $("saved-recovery").textContent = ""; $("recovery-username").textContent = ""; });
 $("download-recovery").addEventListener("click", () => {
-  const blob = new Blob([`FoodLogger recovery code\nSite: ${location.origin}\nUsername: ${state.user.username}\nRecovery code: ${$("saved-recovery").textContent}\nKeep this private.\n`], { type: "text/plain" });
+  const blob = new Blob([`BiteFlow recovery code\nSite: ${location.origin}\nUsername: ${state.user.username}\nRecovery code: ${$("saved-recovery").textContent}\nKeep this private.\n`], { type: "text/plain" });
   const url = URL.createObjectURL(blob); const a = document.createElement("a");
-  a.href = url; a.download = "foodlogger-recovery.txt"; a.click();
+  a.href = url; a.download = "biteflow-recovery.txt"; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 document.querySelectorAll("[data-mode]").forEach((button) => button.addEventListener("click", () => switchMode(button.dataset.mode)));

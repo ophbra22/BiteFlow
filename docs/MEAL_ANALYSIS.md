@@ -1,4 +1,4 @@
-# Biteflow meal-photo analysis — validation and rollout
+# BiteFlow meal-photo analysis — validation and rollout
 
 Updated 2026-10-13. Implementation is in the working tree. No release of this
 feature has yet been deployed or uploaded to TestFlight. The latest verified

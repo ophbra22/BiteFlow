@@ -1,4 +1,4 @@
-# Deploy and operate FoodLogger
+# Deploy and operate BiteFlow
 
 The [Render Blueprint](../render.yaml) runs the Python application on **Render
 Free** with a **Supabase Free PostgreSQL database**. Food recognition uses the
@@ -13,7 +13,7 @@ notice, quotas and rollout checks are in [meal analysis](MEAL_ANALYSIS.md).
 
 Use an existing Supabase Free project or create one within your account's free
 project allowance. Sharing a project shares its storage and connection quotas.
-FoodLogger uses the private `foodlogger` schema and the dedicated
+BiteFlow uses the private `foodlogger` schema and the dedicated
 `foodlogger_app` role; existing applications' schemas are not changed.
 
 1. Run [the schema migration](../supabase/migrations/20261008142103_foodlogger_private_schema.sql)
@@ -49,12 +49,12 @@ compatibility. Search path and query/lock timeouts are set per transaction.
 The schema is not intended for Supabase's public Data API. RLS is enabled and
 only the dedicated Python server role has table access. Authenticated server
 queries enforce individual account ownership. Keep the role credential private;
-it allows the server to manage all FoodLogger accounts and journals. The server
+it allows the server to manage all BiteFlow accounts and journals. The server
 cannot create tables, and does not run migrations at startup.
 
 ## Create the free web service
 
-1. Open [Deploy FoodLogger on Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fophbra22%2Ffood-_loger)
+1. Open [Deploy BiteFlow on Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fophbra22%2FBiteFlow)
    and sign in. The link loads this repository's Blueprint from `main`.
 2. Confirm **Free**, one Docker web service, and **no persistent disk or Render
    database**. Set `DATABASE_URL` to the private pooler URL. The Blueprint
@@ -125,7 +125,7 @@ Export private database backups to storage outside the project on a regular
 schedule. Free hosting is not a backup strategy. A database owner can use
 `pg_dump --schema=foodlogger` against a direct/session connection; use a protected
 password file rather than putting credentials on a command line. Test restoration
-in a separate database with the FoodLogger role and grants recreated. Backups
+in a separate database with the BiteFlow role and grants recreated. Backups
 contain private journals, password hashes and session records; never publish
 or commit them. User CSV export includes nutrition entries, not account recovery.
 

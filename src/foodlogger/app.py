@@ -8,6 +8,7 @@ import re
 import secrets
 import sqlite3
 import threading
+import time
 from io import StringIO
 from pathlib import Path
 from typing import Annotated
@@ -73,51 +74,97 @@ def resolve_session(auth, request: Request) -> tuple[dict | None, bool]:
     return auth.get_session(request.cookies.get(COOKIE)), True
 
 
-class BodyLimitMiddleware:
-    """Bound raw bodies before parsing, including requests with chunked encoding."""
+UPLOAD_PATHS = {"/api/predict", "/api/barcode/scan", "/api/analyze-meal"}
+# Per-account requests per minute, checked before an upload reserves a slot.
+UPLOAD_LIMITS = {
+    "/api/predict": ("predict", 12),
+    "/api/barcode/scan": ("scan", 20),
+    "/api/analyze-meal": ("analyze", 6),
+}
+# Seconds one account may spend sending upload bodies per window. A slot is held
+# while its body arrives, so this bounds how long a slow sender can occupy one.
+UPLOAD_SECONDS, UPLOAD_WINDOW = 90, 300
 
-    def __init__(self, app, auth=None):
+
+def _reply(detail, status, headers=None):
+    return JSONResponse({"detail": detail}, status, headers=headers)
+
+
+class BodyLimitMiddleware:
+    """Bound raw bodies before parsing, including requests with chunked encoding.
+
+    Uploads reserve a slot before their body is read, so a rejected upload is never
+    buffered. Barcode scans have their own slot: a meal analysis that waits on the
+    vision provider no longer blocks them. Each account may have one upload in
+    flight, and is limited by count and by upload time before it can take a slot.
+    """
+
+    def __init__(self, app, auth=None, limiter=None):
         self.app = app
         self.auth = auth
+        self.limiter = limiter
         self.body_timeout = 30
         self.upload_slot = threading.BoundedSemaphore(1)
+        self.barcode_slot = threading.BoundedSemaphore(1)
+        self._uploading = set()
+        self._uploading_lock = threading.Lock()
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH"}:
+        # Every method that can carry a body is bounded: DELETE takes JSON too.
+        if scope["type"] != "http" or scope["method"] in {"GET", "HEAD", "OPTIONS"}:
             return await self.app(scope, receive, send)
-        upload = scope["path"] in {"/api/predict", "/api/barcode/scan", "/api/analyze-meal"}
-        if upload and self.auth is not None:
+        path = scope["path"]
+        if path not in UPLOAD_PATHS:
+            return await self.bounded_request(scope, receive, send)
+        user_id = None
+        if self.auth is not None:
             request = Request(scope)
             try:
                 session, ambient = await run_in_threadpool(resolve_session, self.auth, request)
             except DatabaseUnavailable:
-                return await JSONResponse(
-                    {"detail": "The journal database is temporarily unavailable."}, 503
-                )(scope, receive, send)
-            if not session:
-                return await JSONResponse({"detail": "Sign in to access your journal."}, 401)(
+                return await _reply("The journal database is temporarily unavailable.", 503)(
                     scope, receive, send
                 )
+            if not session:
+                return await _reply("Sign in to access your journal.", 401)(scope, receive, send)
             if ambient and not secrets.compare_digest(
                 request.headers.get("x-csrf-token", ""), session["csrf_token"]
             ):
-                return await JSONResponse(
-                    {"detail": "Your session changed. Refresh and try again."}, 403
+                return await _reply("Your session changed. Refresh and try again.", 403)(
+                    scope, receive, send
+                )
+            user_id = session["user"]["id"]
+        if user_id is not None and self.limiter is not None:
+            name, per_minute = UPLOAD_LIMITS[path]
+            if not self.limiter.allow(
+                "upload-time:" + user_id, UPLOAD_SECONDS, UPLOAD_WINDOW, cost=0
+            ) or not self.limiter.allow(f"{name}:{user_id}", per_minute, 60):
+                return await _reply(
+                    "Too many requests. Please try again later.", 429, {"Retry-After": "60"}
                 )(scope, receive, send)
-        if upload and not self.upload_slot.acquire(blocking=False):
-            response = JSONResponse(
-                {"detail": "Image processing is busy. Please try again shortly."},
-                429,
-                headers={"Retry-After": "3"},
-            )
-            return await response(scope, receive, send)
+        busy = _reply(
+            "Image processing is busy. Please try again shortly.", 429, {"Retry-After": "3"}
+        )
+        if user_id is not None:
+            with self._uploading_lock:
+                if user_id in self._uploading:
+                    return await busy(scope, receive, send)
+                self._uploading.add(user_id)
+        slot = self.barcode_slot if path == "/api/barcode/scan" else self.upload_slot
+        acquired = False
         try:
-            return await self.bounded_request(scope, receive, send)
+            acquired = slot.acquire(blocking=False)
+            if not acquired:
+                return await busy(scope, receive, send)
+            return await self.bounded_request(scope, receive, send, user_id)
         finally:
-            if upload:
-                self.upload_slot.release()
+            if acquired:
+                slot.release()
+            if user_id is not None:
+                with self._uploading_lock:
+                    self._uploading.discard(user_id)
 
-    async def bounded_request(self, scope, receive, send):
+    async def bounded_request(self, scope, receive, send, user_id=None):
         limit = (
             2 * MAX_UPLOAD_BYTES + 65536
             if scope["path"] == "/api/analyze-meal"
@@ -132,6 +179,7 @@ class BodyLimitMiddleware:
             )
         )
         chunks, total = [], 0
+        started = time.monotonic()
         try:
             async with asyncio.timeout(self.body_timeout):
                 while True:
@@ -151,6 +199,11 @@ class BodyLimitMiddleware:
             return await JSONResponse({"detail": "Upload timed out. Please try again."}, 408)(
                 scope, receive, send
             )
+        finally:
+            if user_id is not None and self.limiter is not None:
+                self.limiter.charge(
+                    "upload-time:" + user_id, time.monotonic() - started, UPLOAD_WINDOW
+                )
         iterator = iter(chunks)
 
         async def replay():
@@ -193,7 +246,8 @@ def create_app(
         raise RuntimeError("The free profile requires a PostgreSQL DATABASE_URL.")
     database = location if isinstance(location, Database) else Database(location)
     catalog, journal, auth = Catalog(), Journal(database), AuthStore(database)
-    app.add_middleware(BodyLimitMiddleware, auth=auth)
+    limiter = RateLimiter()
+    app.add_middleware(BodyLimitMiddleware, auth=auth, limiter=limiter)
     if classifier is not None:
         predictor = classifier
     elif os.getenv("FOODLOGGER_INFERENCE", "tensorflow") == "lite":
@@ -205,8 +259,8 @@ def create_app(
     else:
         raise RuntimeError("FOODLOGGER_INFERENCE must be tensorflow or lite.")
     product_client = products if products is not None else OpenFoodFactsClient()
-    limiter = RateLimiter()
     image_slot = threading.BoundedSemaphore(1)
+    barcode_slot = threading.BoundedSemaphore(1)
     app.state.auth = auth
     apple = AppleAuth(auth)
     app.state.apple = apple
@@ -283,6 +337,17 @@ def create_app(
         address = settings.client_address(request)
         limiter.check("auth:" + address, 8, 60)
 
+    def account_limit(name, username, request, limit, seconds, *, ceiling):
+        """Throttle guesses per account and client address.
+
+        Keying on the username alone let anyone lock a user out with a few wrong
+        passwords. The much higher username-only ceiling still bounds guessing
+        spread across many addresses.
+        """
+        username = username.strip().lower()
+        limiter.check(f"{name}:{username}|{settings.client_address(request)}", limit, seconds)
+        limiter.check(f"{name}-account:{username}", ceiling, seconds)
+
     def open_session(user, request, response, recovery_code=None, session_tokens=None):
         token, csrf = session_tokens or auth.create_session(user["id"])
         result = {"user": apple.flags(user), "csrf_token": csrf}
@@ -331,7 +396,7 @@ def create_app(
     @app.post("/api/auth/login")
     def login(credentials: Credentials, request: Request, response: Response):
         auth_request(request)
-        limiter.check("login-user:" + credentials.username.strip().lower(), 8, 60)
+        account_limit("login", credentials.username, request, 8, 60, ceiling=60)
         try:
             user, token, csrf = auth.authenticate_session(
                 credentials.username, credentials.password
@@ -343,7 +408,7 @@ def create_app(
     @app.post("/api/auth/recover")
     def recover(payload: RecoveryRequest, request: Request, response: Response):
         auth_request(request)
-        limiter.check("recovery:" + payload.username.strip().lower(), 5, 300)
+        account_limit("recovery", payload.username, request, 5, 300, ceiling=30)
         try:
             user, code = auth.recover(payload.username, payload.recovery_code, payload.new_password)
         except InvalidCredentials as error:
@@ -454,7 +519,6 @@ def create_app(
     async def predict(
         file: Annotated[UploadFile, File()], session: Annotated[dict, Depends(require_user)]
     ):
-        limiter.check("predict:" + session["user"]["id"], 12, 60)
         if not image_slot.acquire(blocking=False):
             raise HTTPException(
                 429,
@@ -517,7 +581,6 @@ def create_app(
             if not idempotency_key or not IDEMPOTENCY_KEY.fullmatch(idempotency_key):
                 raise HTTPException(422, "Provide a valid Idempotency-Key for meal analysis.")
             parsed = AnalysisOptions.model_validate_json(options)
-            limiter.check("analyze:" + session["user"]["id"], 6, 60)
             acquired = image_slot.acquire(blocking=False)
             if not acquired:
                 raise HTTPException(429, "Image processing is busy.", headers={"Retry-After": "3"})
@@ -569,8 +632,7 @@ def create_app(
     async def scan_barcode(
         file: Annotated[UploadFile, File()], session: Annotated[dict, Depends(require_user)]
     ):
-        limiter.check("scan:" + session["user"]["id"], 20, 60)
-        if not image_slot.acquire(blocking=False):
+        if not barcode_slot.acquire(blocking=False):
             raise HTTPException(
                 429,
                 "Image processing is busy. Please try again shortly.",
@@ -586,7 +648,7 @@ def create_app(
         finally:
             if image is not None:
                 image.close()
-            image_slot.release()
+            barcode_slot.release()
             await file.close()
 
     def save_once(response: Response, user_id: str, key: str | None, save):

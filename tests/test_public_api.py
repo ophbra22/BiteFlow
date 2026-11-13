@@ -267,3 +267,44 @@ def test_image_work_is_bounded_across_barcode_and_prediction(tmp_path):
             client.post("/api/predict", files={"file": ("x.png", picture.getvalue())}).status_code
             == 200
         )
+
+
+def test_wrong_passwords_from_one_address_do_not_lock_the_account_for_others(tmp_path):
+    app = create_app(tmp_path / "app.sqlite3")
+    headers = {"X-FoodLogger-Request": "1"}
+    password = "long-enough-password-2026"
+    with (
+        TestClient(app, client=("198.51.100.7", 4000)) as attacker,
+        TestClient(app, client=("203.0.113.9", 5000)) as owner,
+    ):
+        register(owner, "alice")
+        owner.cookies.clear()
+        wrong = {"username": "alice", "password": "not-the-right-password"}
+        codes = [
+            attacker.post("/api/auth/login", json=wrong, headers=headers).status_code
+            for _ in range(10)
+        ]
+        assert codes[0] == 401 and codes[-1] == 429
+        response = owner.post(
+            "/api/auth/login", json={"username": "alice", "password": password}, headers=headers
+        )
+        assert response.status_code == 200, response.text
+
+
+def test_account_deletion_rejects_an_oversized_body_before_reading_it(tmp_path):
+    with TestClient(create_app(tmp_path / "app.sqlite3")) as client:
+        body = b'{"password":"' + b"a" * 200_000 + b'","confirmation":"DELETE"}'
+        response = client.request(
+            "DELETE",
+            "/api/auth/account",
+            content=body,
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 413
+        register(client, "alice")
+        response = client.request(
+            "DELETE",
+            "/api/auth/account",
+            json={"password": "long-enough-password-2026", "confirmation": "DELETE"},
+        )
+        assert response.status_code == 204

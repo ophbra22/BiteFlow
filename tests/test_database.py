@@ -160,3 +160,62 @@ def test_database_failure_logs_only_safe_reason(monkeypatch, caplog, message, ex
     assert expected in caplog.text
     assert "SECRET" not in caplog.text + str(error.value)
     assert "stage=connect" in caplog.text
+
+
+def test_postgres_connections_are_reused_and_a_stale_one_is_replaced(monkeypatch):
+    psycopg = pytest.importorskip("psycopg")
+    from psycopg.pq import TransactionStatus
+
+    from foodlogger.database import SESSION_SETUP, Database
+
+    class Info:
+        transaction_status = TransactionStatus.IDLE
+
+    class Connection:
+        def __init__(self):
+            self.closed, self.broken, self.info, self.stale = False, False, Info(), False
+            self.statements, self.commits = [], 0
+
+        def execute(self, statement, parameters=()):
+            if self.stale:
+                raise psycopg.OperationalError("server closed the connection unexpectedly")
+            self.statements.append(statement)
+            self.info.transaction_status = TransactionStatus.INTRANS
+
+        def commit(self):
+            self.commits += 1
+            self.info.transaction_status = TransactionStatus.IDLE
+
+        def rollback(self):
+            self.info.transaction_status = TransactionStatus.IDLE
+
+        def close(self):
+            self.closed = True
+
+    opened = []
+
+    def connect(**options):
+        opened.append(Connection())
+        return opened[-1]
+
+    monkeypatch.setattr(psycopg, "connect", connect)
+    database = Database("postgresql://app:SECRET@db.example/postgres")
+    for _ in range(3):
+        with database.connect() as db:
+            db.execute("SELECT ?", (1,))
+    assert len(opened) == 1 and opened[0].commits == 3
+    # Search path and timeouts are sent as one statement in every transaction.
+    assert opened[0].statements == [SESSION_SETUP, "SELECT %s"] * 3
+
+    with pytest.raises(RuntimeError), database.connect() as db:
+        db.execute("SELECT 1")
+        raise RuntimeError("caller failed")
+    assert opened[0].commits == 3 and len(opened) == 1  # rolled back, still reusable
+
+    opened[0].stale = True
+    with database.connect() as db:
+        db.execute("SELECT 1")
+    assert len(opened) == 2 and opened[0].closed and opened[1].commits == 1
+
+    database.close()
+    assert opened[1].closed

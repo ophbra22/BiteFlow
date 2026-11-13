@@ -57,19 +57,33 @@ class RateLimiter:
         self._lock = threading.Lock()
         self._max_keys = max_keys
 
-    def check(self, key: str, limit: int, seconds: int):
+    def allow(self, key: str, limit: float, seconds: int, cost: float = 1.0) -> bool:
+        """Record ``cost`` unless the key already used ``limit`` within the window.
+
+        A zero cost only asks whether the budget is exhausted. Costs let callers
+        budget something other than request counts, such as seconds of upload time.
+        """
         now = time.monotonic()
         with self._lock:
-            timestamps = self._entries.setdefault(key, deque())
+            entries = self._entries.setdefault(key, deque())
             self._entries.move_to_end(key)
-            while timestamps and timestamps[0] <= now - seconds:
-                timestamps.popleft()
-            if len(timestamps) >= limit:
-                raise HTTPException(
-                    429,
-                    "Too many requests. Please try again later.",
-                    headers={"Retry-After": str(seconds)},
-                )
-            timestamps.append(now)
+            while entries and entries[0][0] <= now - seconds:
+                entries.popleft()
+            allowed = sum(amount for _, amount in entries) < limit
+            if allowed and cost:
+                entries.append((now, cost))
             while len(self._entries) > self._max_keys:
                 self._entries.popitem(last=False)
+            return allowed
+
+    def charge(self, key: str, cost: float, seconds: int) -> None:
+        """Add usage that is only known afterwards; ``allow`` with cost 0 reads it."""
+        self.allow(key, float("inf"), seconds, cost)
+
+    def check(self, key: str, limit: int, seconds: int):
+        if not self.allow(key, limit, seconds):
+            raise HTTPException(
+                429,
+                "Too many requests. Please try again later.",
+                headers={"Retry-After": str(seconds)},
+            )

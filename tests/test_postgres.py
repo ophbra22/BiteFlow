@@ -43,6 +43,7 @@ def database():
             Path("supabase/migrations/20261008142103_foodlogger_private_schema.sql").read_text()
         )
         db.execute(Path("supabase/migrations/20261011194917_apple_sign_in.sql").read_text())
+        db.execute(Path("supabase/migrations/20261113120000_schema_version_2.sql").read_text())
         db.execute("ALTER ROLE foodlogger_app LOGIN PASSWORD 'local-test-app-password'")
         db.execute("CREATE TABLE IF NOT EXISTS public.unrelated_app (id integer)")
         db.execute("REVOKE ALL ON public.unrelated_app FROM PUBLIC")
@@ -57,6 +58,7 @@ def database():
     result = Database(url)
     result.check_schema()
     yield result
+    result.close()
 
 
 def test_accounts_journal_and_restart_are_private(database):
@@ -296,3 +298,62 @@ def test_apple_link_and_concurrent_first_login_preserve_private_identity(databas
             ).fetchone()["n"]
             == 2
         )
+
+
+def owner_connection():
+    import psycopg
+
+    return psycopg.connect(os.environ["FOODLOGGER_TEST_DATABASE_URL"], autocommit=True)
+
+
+def test_connections_are_reused_and_replaced_after_the_server_closes_them(database, monkeypatch):
+    import psycopg
+
+    opened, connect = [], psycopg.connect
+
+    def counting(*args, **options):
+        opened.append(1)
+        return connect(*args, **options)
+
+    database.close()
+    monkeypatch.setattr(psycopg, "connect", counting)
+    for _ in range(5):
+        with database.connect() as db:
+            assert db.execute("SELECT current_schema() AS name").fetchone()["name"] == "foodlogger"
+    assert len(opened) == 1
+    with pytest.raises(RuntimeError), database.connect() as db:
+        db.execute(
+            "INSERT INTO users (id, username, password_hash, recovery_hash) VALUES (?,?,?,?)",
+            ("u1", "rolled-back", "x", "y"),
+        )
+        raise RuntimeError("caller failed")
+    with database.connect() as db:
+        assert db.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"] == 0
+    assert len(opened) == 1
+    monkeypatch.setattr(psycopg, "connect", connect)
+    with owner_connection() as owner:
+        owner.execute(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+            "WHERE usename = 'foodlogger_app'"
+        )
+    monkeypatch.setattr(psycopg, "connect", counting)
+    with database.connect() as db:
+        assert db.execute("SELECT 1 AS one").fetchone()["one"] == 1
+    assert len(opened) == 2
+
+
+def test_schema_check_requires_the_apple_sign_in_tables(database):
+    from foodlogger.database import DatabaseUnavailable
+
+    with database.connect() as db:
+        assert db.execute("SELECT version FROM schema_version").fetchone()["version"] == 2
+    with owner_connection() as owner:
+        # A database migrated before the version marker existed is still accepted.
+        owner.execute("UPDATE foodlogger.schema_version SET version = 1")
+        database.check_schema()
+        owner.execute("DROP TABLE foodlogger.apple_identities, foodlogger.apple_challenges")
+        with pytest.raises(DatabaseUnavailable, match="Apple sign-in migration"):
+            database.check_schema()
+        owner.execute("UPDATE foodlogger.schema_version SET version = 3")
+        with pytest.raises(DatabaseUnavailable, match="needs setup"):
+            database.check_schema()

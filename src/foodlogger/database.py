@@ -3,11 +3,26 @@
 import logging
 import sqlite3
 import ssl
+import threading
+import time
+from collections import deque
 from contextlib import contextmanager
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 SUPABASE_CA = Path(__file__).parent / "data" / "supabase-ca.crt"
+# Version 2 records that the Apple sign-in tables exist. Version 1 databases that
+# already have them (the migration predates this marker) are still accepted.
+SCHEMA_VERSIONS = (1, 2)
+# Transaction-local settings do not leak between pooled or reused connections.
+# One statement, one round trip; no parameters, so several commands are allowed.
+SESSION_SETUP = (
+    "SET LOCAL search_path TO foodlogger, pg_catalog; "
+    "SET LOCAL statement_timeout = '10s'; "
+    "SET LOCAL lock_timeout = '5s'"
+)
+MAX_IDLE_CONNECTIONS = 4
+MAX_IDLE_SECONDS = 60
 
 
 def _failure_reason(error):
@@ -88,6 +103,9 @@ class Database:
             options.setdefault("connect_timeout", "5")
             options["application_name"] = "foodlogger"
             self.connection_options = options
+            # Reusing connections avoids a TCP, TLS and login handshake per query.
+            self._idle = deque()
+            self._idle_lock = threading.Lock()
         else:
             if "://" in value or not value:
                 raise ValueError("Use a PostgreSQL URL or a local SQLite file path.")
@@ -110,22 +128,27 @@ class Database:
                 db.close()
             return
         import psycopg
-        from psycopg.rows import dict_row
 
-        stage = "connect"
+        stage, connection = "connect", None
         try:
-            # No prepared statements: compatible with Supabase's transaction pooler.
-            with psycopg.connect(
-                **self.connection_options, row_factory=dict_row, prepare_threshold=None
-            ) as db:
+            connection, reused = self._checkout()
+            stage = "session_setup"
+            try:
+                connection.execute(SESSION_SETUP)
+            except psycopg.OperationalError:
+                if not reused:
+                    raise
+                # The server or pooler closed an idle connection. Nothing of the
+                # caller's has run yet, so a fresh connection is a safe retry.
+                self._discard(connection)
+                stage, connection = "connect", None
+                connection = self._open()
                 stage = "session_setup"
-                # Transaction-local settings do not leak between pooled connections.
-                db.execute("SET LOCAL search_path TO foodlogger, pg_catalog")
-                db.execute("SET LOCAL statement_timeout = '10s'")
-                db.execute("SET LOCAL lock_timeout = '5s'")
-                stage = "query"
-                yield PostgresConnection(db)
-                stage = "commit"
+                connection.execute(SESSION_SETUP)
+            stage = "query"
+            yield PostgresConnection(connection)
+            stage = "commit"
+            connection.commit()
         except psycopg.IntegrityError:
             raise sqlite3.IntegrityError("Database constraint rejected the operation.") from None
         except psycopg.Error as error:
@@ -133,10 +156,77 @@ class Database:
                 "PostgreSQL operation failed (stage=%s, reason=%s).", stage, _failure_reason(error)
             )
             raise DatabaseUnavailable("The journal database is temporarily unavailable.") from None
+        finally:
+            if connection is not None:
+                self._release(connection)
+
+    def _open(self):
+        import psycopg
+        from psycopg.rows import dict_row
+
+        # No prepared statements: compatible with Supabase's transaction pooler.
+        return psycopg.connect(
+            **self.connection_options, row_factory=dict_row, prepare_threshold=None
+        )
+
+    def _checkout(self):
+        """Return (connection, reused), preferring the most recently used idle one."""
+        while True:
+            with self._idle_lock:
+                if not self._idle:
+                    break
+                connection, since = self._idle.pop()
+            if time.monotonic() - since <= MAX_IDLE_SECONDS and not connection.closed:
+                return connection, True
+            self._discard(connection)
+        return self._open(), False
+
+    def _release(self, connection):
+        """Roll back anything uncommitted and keep a healthy connection for reuse."""
+        from psycopg.pq import TransactionStatus
+
+        try:
+            if not connection.closed and not connection.broken:
+                if connection.info.transaction_status != TransactionStatus.IDLE:
+                    connection.rollback()
+                if connection.info.transaction_status == TransactionStatus.IDLE:
+                    with self._idle_lock:
+                        if len(self._idle) < MAX_IDLE_CONNECTIONS:
+                            self._idle.append((connection, time.monotonic()))
+                            return
+        except Exception:
+            pass
+        self._discard(connection)
+
+    @staticmethod
+    def _discard(connection):
+        try:
+            connection.close()
+        except Exception:
+            pass
+
+    def close(self):
+        """Close idle PostgreSQL connections. Later calls simply open new ones."""
+        if self.postgres:
+            with self._idle_lock:
+                idle, self._idle = list(self._idle), deque()
+            for connection, _ in idle:
+                self._discard(connection)
 
     def check_schema(self):
         if self.postgres:
             with self.connect() as db:
-                version = db.execute("SELECT version FROM schema_version WHERE id = 1").fetchone()
-                if not version or version["version"] != 1:
+                row = db.execute("SELECT version FROM schema_version WHERE id = 1").fetchone()
+                version = row["version"] if row else None
+                if version not in SCHEMA_VERSIONS:
                     raise DatabaseUnavailable("The journal database schema needs setup.")
+                if version < 2:
+                    tables = db.execute(
+                        "SELECT to_regclass('foodlogger.apple_identities') AS identities, "
+                        "to_regclass('foodlogger.apple_challenges') AS challenges"
+                    ).fetchone()
+                    if tables["identities"] is None or tables["challenges"] is None:
+                        # Fail at startup instead of on every later sign-in.
+                        raise DatabaseUnavailable(
+                            "The journal database is missing the Apple sign-in migration."
+                        )

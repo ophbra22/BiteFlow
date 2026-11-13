@@ -20,6 +20,11 @@ BiteFlow uses the private `foodlogger` schema and the dedicated
    once using the Supabase SQL editor as the database owner. It intentionally
    refuses an existing schema/role instead of overwriting them. Do not rerun the
    whole migration on an already configured project.
+   Then run the later files in `supabase/migrations/` in order, also once and as
+   the owner: [Apple sign-in](../supabase/migrations/20261011194917_apple_sign_in.sql)
+   and [schema version 2](../supabase/migrations/20261113120000_schema_version_2.sql).
+   The server checks at startup that the Apple sign-in tables exist and refuses to
+   start without them.
 2. Set a strong, unique password for the new role through a private SQL-editor
    query: `ALTER ROLE foodlogger_app LOGIN PASSWORD '<new-random-password>';`.
    Never save that query, password or connection URL in this repository.
@@ -45,6 +50,8 @@ the build-machine paths embedded in binary libpq. An explicit
 for a project-specific or replacement CA. Certificate-chain and hostname
 verification remain enabled with `sslmode=verify-full`. Prepared statements are disabled for transaction-pooler
 compatibility. Search path and query/lock timeouts are set per transaction.
+The server keeps up to four idle database connections for at most 60 seconds and
+reuses them, replacing any the pooler has closed.
 
 The schema is not intended for Supabase's public Data API. RLS is enabled and
 only the dedicated Python server role has table access. Authenticated server
